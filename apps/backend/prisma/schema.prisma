@@ -1,0 +1,1575 @@
+// =====================================================================
+// Prisma schema — PHASE 1 FOUNDATION (module 5)
+// Implements the Phase 1 subset of the Master Database Schema v1.0:
+//   Configuration backbone · Identity & Auth · RBAC · Audit.
+// Conforms to Database Master Architecture v1.0:
+//   - Globally-unique non-semantic UUID keys (§6-7)
+//   - Standard audit fields + soft delete on every entity (§8-9)
+//   - Absolute-time (UTC) timestamps (§13)
+//   - Configurable references, nothing hardcoded (§10-12, Constitution Art. IX/X)
+// NOTE: Later phases add Student/Parent/Tutor/Booking/etc. via governed
+// migrations (DB Arch §22-23). This is intentionally the foundation only.
+// =====================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// ENUMS (status values are constrained; business value-sets remain
+// configurable data where the domain requires it — Art. X)
+// ---------------------------------------------------------------------
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum IdentityStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+}
+
+enum RoleFamily {
+  OPERATIONAL
+  ACTOR
+}
+
+enum PermissionScope {
+  SELF
+  RELATIONSHIP
+  JURISDICTION
+  PLATFORM
+}
+
+enum CredentialMethod {
+  PASSWORD
+  OTP
+  FEDERATED
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum CountryStatus {
+  ONBOARDING
+  ACTIVE
+  INACTIVE
+}
+
+enum ConfigScope {
+  PLATFORM
+  COUNTRY
+  JURISDICTION
+  ROLE
+  ACCOUNT
+}
+
+enum TextDirection {
+  LTR
+  RTL
+}
+
+// ---------------------------------------------------------------------
+// CONFIGURATION BACKBONE (Master Schema Area 8 — Countries/Localization/Settings)
+// Referenced widely; no country/currency/language hardcoded (Art. IX/X).
+// ---------------------------------------------------------------------
+
+model Country {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryCode       String        @unique @map("country_code") // ISO code (config data)
+  name              String
+  defaultLocaleId   String?       @map("default_locale_id") @db.Uuid
+  defaultCurrencyId String?       @map("default_currency_id") @db.Uuid
+  status            CountryStatus @default(ONBOARDING)
+
+  defaultLocale   Locale?        @relation("CountryDefaultLocale", fields: [defaultLocaleId], references: [id])
+  defaultCurrency Currency?      @relation("CountryDefaultCurrency", fields: [defaultCurrencyId], references: [id])
+  jurisdictions   Jurisdiction[]
+  locales         Locale[]       @relation("LocaleRegion")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([status])
+  @@index([isDeleted])
+  @@map("country")
+}
+
+model Jurisdiction {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryId String  @map("country_id") @db.Uuid
+  name      String
+  status    String  @default("active")
+
+  country    Country                 @relation(fields: [countryId], references: [id])
+  attributes JurisdictionAttribute[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([countryId])
+  @@index([isDeleted])
+  @@map("jurisdiction")
+}
+
+// Attribute SLOT for a jurisdiction; the VALUE is a Pending Business/Legal
+// Decision (Master Schema §JurisdictionAttribute) — never assumed here.
+model JurisdictionAttribute {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jurisdictionId String  @map("jurisdiction_id") @db.Uuid
+  attributeKey   String  @map("attribute_key")
+  attributeValue Json?   @map("attribute_value")
+  status         String  @default("active")
+
+  jurisdiction Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([jurisdictionId, attributeKey])
+  @@index([jurisdictionId])
+  @@map("jurisdiction_attribute")
+}
+
+model Currency {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  currencyCode   String  @unique @map("currency_code") // ISO 4217 (config data)
+  name           String
+  minorUnitScale Int     @map("minor_unit_scale") // precision (DB Arch §12.2)
+  status         String  @default("active")
+
+  countriesUsingAsDefault Country[] @relation("CountryDefaultCurrency")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([isDeleted])
+  @@map("currency")
+}
+
+model Language {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  languageCode String        @unique @map("language_code") // BCP-47 (config data)
+  name         String
+  direction    TextDirection @default(LTR) // RTL first-class (Art. 3.3)
+  status       String        @default("active")
+
+  locales          Locale[]
+  translationValues TranslationValue[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([isDeleted])
+  @@map("language")
+}
+
+model Locale {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  localeCode      String  @unique @map("locale_code")
+  languageId      String  @map("language_id") @db.Uuid
+  regionCountryId String? @map("region_country_id") @db.Uuid
+  formattingRules Json?   @map("formatting_rules")
+  status          String  @default("active")
+
+  language      Language  @relation(fields: [languageId], references: [id])
+  regionCountry Country?  @relation("LocaleRegion", fields: [regionCountryId], references: [id])
+  countriesDefault Country[] @relation("CountryDefaultLocale")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([languageId])
+  @@index([isDeleted])
+  @@map("locale")
+}
+
+model TranslationKey {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  keyName     String  @unique @map("key_name")
+  description String?
+  status      String  @default("active")
+
+  values TranslationValue[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@map("translation_key")
+}
+
+model TranslationValue {
+  id               String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  translationKeyId String @map("translation_key_id") @db.Uuid
+  languageId       String @map("language_id") @db.Uuid
+  value            String @db.Text
+  status           String @default("active")
+
+  translationKey TranslationKey @relation(fields: [translationKeyId], references: [id])
+  language        Language       @relation(fields: [languageId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([translationKeyId, languageId])
+  @@index([languageId])
+  @@map("translation_value")
+}
+
+model Setting {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  settingKey     String      @map("setting_key")
+  scopeType      ConfigScope @map("scope_type")
+  scopeReference String?     @map("scope_reference") @db.Uuid
+  value          Json
+  configVersionId String?    @map("config_version_id") @db.Uuid
+
+  configVersion ConfigurationVersion? @relation(fields: [configVersionId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([settingKey, scopeType, scopeReference])
+  @@index([scopeType, scopeReference])
+  @@map("setting")
+}
+
+model ConfigurationVersion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  versionLabel String   @map("version_label")
+  status      String    @default("draft")
+  activatedAt DateTime? @map("activated_at") @db.Timestamptz(6)
+
+  settings Setting[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@map("configuration_version")
+}
+
+// ---------------------------------------------------------------------
+// IDENTITY & AUTHENTICATION (Master Schema Area 1 — Authentication)
+// ---------------------------------------------------------------------
+
+model Identity {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  primaryEmail String?        @unique @map("primary_email") @db.Citext
+  primaryPhone String?        @unique @map("primary_phone")
+  status       IdentityStatus @default(ACTIVE)
+
+  account     UserAccount?
+  credentials AuthCredential[]
+  sessions    AuthSession[]
+  authEvents  AuthEvent[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([status])
+  @@index([isDeleted])
+  @@map("identity")
+}
+
+model AuthCredential {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identityId      String           @map("identity_id") @db.Uuid
+  method          CredentialMethod
+  // Protected representation only — NEVER plaintext (DB Arch §21, Blueprint §11).
+  secretReference String           @map("secret_reference")
+  status          String           @default("active")
+  expiresAt       DateTime?        @map("expires_at") @db.Timestamptz(6)
+
+  identity Identity @relation(fields: [identityId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([identityId])
+  @@index([identityId, method])
+  @@map("auth_credential")
+}
+
+model AuthSession {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identityId      String        @map("identity_id") @db.Uuid
+  // Hash of the refresh token — never store the raw token (Blueprint §11).
+  refreshTokenHash String       @map("refresh_token_hash")
+  establishedAt   DateTime      @default(now()) @map("established_at") @db.Timestamptz(6)
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(6)
+  status          SessionStatus @default(ACTIVE)
+  context         Json?
+
+  identity Identity @relation(fields: [identityId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([identityId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("auth_session")
+}
+
+// Append-only authentication event log (DB Arch §9.2). No updates/deletes.
+model AuthEvent {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identityId String?   @map("identity_id") @db.Uuid
+  eventType  String    @map("event_type")
+  outcome    String
+  occurredAt DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  context    Json?
+
+  identity Identity? @relation(fields: [identityId], references: [id])
+
+  @@index([identityId])
+  @@index([eventType, occurredAt])
+  @@map("auth_event")
+}
+
+// ---------------------------------------------------------------------
+// USER MANAGEMENT & RBAC (Master Schema Area 1 — User Management)
+// Explicit, least-privilege, deny-by-default (Roles doc §15).
+// ---------------------------------------------------------------------
+
+model UserAccount {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identityId          String        @unique @map("identity_id") @db.Uuid
+  displayName         String        @map("display_name")
+  status              AccountStatus @default(ACTIVE)
+  primaryLocaleId     String?       @map("primary_locale_id") @db.Uuid
+  primaryJurisdictionId String?     @map("primary_jurisdiction_id") @db.Uuid
+
+  identity      Identity            @relation(fields: [identityId], references: [id])
+  accountRoles  AccountRole[]
+  relationsFrom AccountRelationship[] @relation("RelationshipFrom")
+  relationsTo   AccountRelationship[] @relation("RelationshipTo")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([status])
+  @@index([primaryJurisdictionId])
+  @@index([isDeleted])
+  @@map("user_account")
+}
+
+model Role {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String     @unique
+  family       RoleFamily
+  description  String
+  isSystemRole Boolean    @default(false) @map("is_system_role")
+
+  rolePermissions RolePermission[]
+  accountRoles    AccountRole[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@map("role")
+}
+
+model Permission {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String  @unique
+  description String
+  domainArea  String  @map("domain_area")
+  sensitivity String  @default("normal") // normal | high_risk (Roles §16.5)
+
+  rolePermissions RolePermission[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([domainArea])
+  @@map("permission")
+}
+
+model RolePermission {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permission")
+}
+
+model AccountRole {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId      String          @map("account_id") @db.Uuid
+  roleId         String          @map("role_id") @db.Uuid
+  scopeType      PermissionScope @default(PLATFORM) @map("scope_type")
+  scopeReference String?         @map("scope_reference") @db.Uuid
+
+  account UserAccount @relation(fields: [accountId], references: [id])
+  role    Role        @relation(fields: [roleId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([accountId, roleId, scopeType, scopeReference])
+  @@index([accountId])
+  @@index([roleId])
+  @@map("account_role")
+}
+
+// Structural relationship between accounts (e.g., guardianship). Rules are
+// Pending Business/Legal Decision (Roles doc §8; Requirements BR-102).
+model AccountRelationship {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromAccountId    String    @map("from_account_id") @db.Uuid
+  toAccountId      String    @map("to_account_id") @db.Uuid
+  relationshipType String    @map("relationship_type")
+  status           String    @default("active")
+  establishedAt    DateTime  @default(now()) @map("established_at") @db.Timestamptz(6)
+
+  fromAccount UserAccount @relation("RelationshipFrom", fields: [fromAccountId], references: [id])
+  toAccount   UserAccount @relation("RelationshipTo", fields: [toAccountId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([fromAccountId, toAccountId, relationshipType])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@map("account_relationship")
+}
+
+// ---------------------------------------------------------------------
+// AUDIT (Master Schema Area 9 — Audit Logs)
+// Append-only, tamper-evident. No role has unaudited power (Roles §13.3).
+// ---------------------------------------------------------------------
+
+model AuditRecord {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorAccountId   String?  @map("actor_account_id") @db.Uuid
+  action           String
+  entityType       String   @map("entity_type")
+  entityReference  String?  @map("entity_reference") @db.Uuid
+  authorityContext Json?    @map("authority_context")
+  occurredAt       DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  jurisdictionId   String?  @map("jurisdiction_id") @db.Uuid
+  classification   String   @default("operational")
+  correlationId    String?  @map("correlation_id")
+
+  @@index([entityType, entityReference])
+  @@index([actorAccountId, occurredAt])
+  @@index([action])
+  @@index([occurredAt])
+  @@map("audit_record")
+}
+
+// =====================================================================
+// PHASE 2 — CORE MARKETPLACE FOUNDATION (actor domains)
+// Master Database Schema Areas 1-2: Student, Parent, Tutor, Verification,
+// Offerings, Availability, and the guardianship relationship.
+// Appended via governed migration (DB Arch §22-23). Phase 1 models unchanged.
+// =====================================================================
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+enum VerificationCaseStatus {
+  OPEN
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+enum OfferingStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum AvailabilityStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model StudentProfile {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId            String    @unique @map("account_id") @db.Uuid
+  dateOfBirth          DateTime? @map("date_of_birth") @db.Date
+  // Minor determination rule is Pending Business/Legal Decision (Art. VI);
+  // absent an authoritative rule, treated as minor (most protective — BR-003).
+  isMinor              Boolean   @default(true) @map("is_minor")
+  learningContext      Json?     @map("learning_context")
+  jurisdictionId       String?   @map("jurisdiction_id") @db.Uuid
+  classification       String    @default("minor_related")
+
+  // account_id -> user_account(id): FK enforced at DB level in the migration.
+  // No Prisma relation is declared, to keep the Phase 1 UserAccount model intact
+  // (boundary-owned data; DB Arch §2). Joins use the scalar accountId.
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([accountId])
+  @@index([jurisdictionId])
+  @@index([isDeleted])
+  @@map("student_profile")
+}
+
+model ParentProfile {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId       String  @unique @map("account_id") @db.Uuid
+  oversightContext Json?  @map("oversight_context")
+  classification  String  @default("personal")
+
+  // account_id -> user_account(id): FK enforced at DB level (Phase 1 intact).
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([accountId])
+  @@map("parent_profile")
+}
+
+model TutorProfile {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId          String             @unique @map("account_id") @db.Uuid
+  headline           String?
+  bio                String?            @db.Text
+  verificationStatus VerificationStatus @default(UNVERIFIED) @map("verification_status")
+  jurisdictionId     String?            @map("jurisdiction_id") @db.Uuid
+  // Denormalized discovery signals (kept in sync by the domain; never a source
+  // of truth for money/rules). Aggregated rating is display-only.
+  ratingAverage      Decimal?           @map("rating_average") @db.Decimal(3, 2)
+  ratingCount        Int                @default(0) @map("rating_count")
+  classification     String             @default("personal")
+
+  // account_id -> user_account(id): FK enforced at DB level (Phase 1 intact).
+  offerings     TutorOffering[]
+  availabilities TutorAvailability[]
+  verificationCases VerificationCase[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([accountId])
+  @@index([verificationStatus])
+  @@index([jurisdictionId])
+  @@index([isDeleted])
+  @@map("tutor_profile")
+}
+
+model TutorOffering {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId     String         @map("tutor_id") @db.Uuid
+  subject     String
+  title       String
+  description String?        @db.Text
+  // Money is ALWAYS currency-explicit (DB Arch §12). Pricing RULES are PBD;
+  // the tutor may state a rate, but commission/fees remain Pending Business Decision.
+  basePrice   Decimal?       @map("base_price") @db.Decimal(18, 4)
+  currencyId  String?        @map("currency_id") @db.Uuid
+  status      OfferingStatus @default(DRAFT)
+
+  tutor    TutorProfile @relation(fields: [tutorId], references: [id])
+  // currency_id -> currency(id): FK enforced at DB level (Phase 1 Currency intact).
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([tutorId])
+  @@index([subject])
+  @@index([status])
+  @@map("tutor_offering")
+}
+
+model TutorAvailability {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId    String             @map("tutor_id") @db.Uuid
+  // Absolute-time storage (DB Arch §13); presented in the actor's timezone.
+  startAt    DateTime           @map("start_at") @db.Timestamptz(6)
+  endAt      DateTime           @map("end_at") @db.Timestamptz(6)
+  recurrence Json?
+  status     AvailabilityStatus @default(ACTIVE)
+
+  tutor TutorProfile @relation(fields: [tutorId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([tutorId])
+  @@index([startAt, endAt])
+  @@index([status])
+  @@map("tutor_availability")
+}
+
+model VerificationCase {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId        String                 @map("tutor_id") @db.Uuid
+  status         VerificationCaseStatus @default(OPEN)
+  jurisdictionId String?                @map("jurisdiction_id") @db.Uuid
+  openedAt       DateTime               @default(now()) @map("opened_at") @db.Timestamptz(6)
+  decidedAt      DateTime?              @map("decided_at") @db.Timestamptz(6)
+  decidedBy      String?                @map("decided_by") @db.Uuid
+  notes          String?                @db.Text
+
+  tutor  TutorProfile        @relation(fields: [tutorId], references: [id])
+  checks VerificationCheck[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([tutorId])
+  @@index([status])
+  @@index([jurisdictionId])
+  @@map("verification_case")
+}
+
+model VerificationCheck {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId      String   @map("case_id") @db.Uuid
+  checkType   String   @map("check_type")
+  outcome     String   @default("pending")
+  performedAt DateTime? @map("performed_at") @db.Timestamptz(6)
+  classification String @default("personal")
+
+  verificationCase VerificationCase @relation(fields: [caseId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([caseId])
+  @@index([checkType, outcome])
+  @@map("verification_check")
+}
+
+// =====================================================================
+// PHASE 2b — CORE BUSINESS PLATFORM (catalog, learning, favorites, booking)
+// Appended via governed migration (DB Arch §22-23). All cross-references to
+// prior models use SCALAR foreign keys (FKs enforced at DB level) so no
+// completed model is modified — consistent with the Phase 2 pattern.
+// =====================================================================
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  ABANDONED
+}
+
+enum RateUnit {
+  PER_HOUR
+  PER_SESSION
+}
+
+model TutorSubject {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId   String  @map("tutor_id") @db.Uuid // -> tutor_profile(id), FK at DB level
+  subject   String
+  status    String  @default("active")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([tutorId, subject])
+  @@index([tutorId])
+  @@index([subject])
+  @@map("tutor_subject")
+}
+
+model TutorLanguage {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId     String  @map("tutor_id") @db.Uuid // -> tutor_profile(id)
+  languageId  String  @map("language_id") @db.Uuid // -> language(id), configurable
+  proficiency String  @default("fluent") // native|fluent|intermediate|basic
+  status      String  @default("active")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([tutorId, languageId])
+  @@index([tutorId])
+  @@index([languageId])
+  @@map("tutor_language")
+}
+
+model TutorRate {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tutorId    String   @map("tutor_id") @db.Uuid // -> tutor_profile(id)
+  // Money is ALWAYS currency-explicit (DB Arch §12). This is an indicative rate;
+  // commission/fee/settlement RULES remain Pending Business Decisions (BR-100/101).
+  rate       Decimal  @db.Decimal(18, 4)
+  currencyId String   @map("currency_id") @db.Uuid // -> currency(id), configurable
+  unit       RateUnit @default(PER_HOUR)
+  status     String   @default("active")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([tutorId])
+  @@map("tutor_rate")
+}
+
+model LearningGoal {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId   String     @map("student_id") @db.Uuid // -> student_profile(id)
+  title       String
+  description String?    @db.Text
+  targetDate  DateTime?  @map("target_date") @db.Date
+  status      GoalStatus @default(ACTIVE)
+  classification String  @default("minor_related")
+
+  progress ProgressRecord[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([studentId])
+  @@index([status])
+  @@map("learning_goal")
+}
+
+model ProgressRecord {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId  String    @map("student_id") @db.Uuid // -> student_profile(id)
+  goalId     String?   @map("goal_id") @db.Uuid
+  metricKey  String    @map("metric_key")
+  value      Decimal?  @db.Decimal(18, 4)
+  note       String?   @db.Text
+  recordedAt DateTime  @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  classification String @default("minor_related")
+
+  goal LearningGoal? @relation(fields: [goalId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([studentId])
+  @@index([goalId])
+  @@map("progress_record")
+}
+
+model Favorite {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentAccountId String  @map("student_account_id") @db.Uuid // -> user_account(id)
+  tutorId          String  @map("tutor_id") @db.Uuid // -> tutor_profile(id)
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@unique([studentAccountId, tutorId])
+  @@index([studentAccountId])
+  @@index([tutorId])
+  @@map("favorite")
+}
+
+model Booking {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId         String        @map("student_id") @db.Uuid // -> student_profile(id)
+  tutorId           String        @map("tutor_id") @db.Uuid // -> tutor_profile(id)
+  offeringId        String?       @map("offering_id") @db.Uuid // -> tutor_offering(id)
+  availabilityId    String?       @map("availability_id") @db.Uuid // -> tutor_availability(id)
+  bookedByAccountId String        @map("booked_by_account_id") @db.Uuid // -> user_account(id)
+  scheduledStart    DateTime      @map("scheduled_start") @db.Timestamptz(6)
+  scheduledEnd      DateTime      @map("scheduled_end") @db.Timestamptz(6)
+  status            BookingStatus @default(REQUESTED)
+  // Indicative price captured at request; commercial RULES (final price,
+  // commission, payment) are Pending Business Decisions (BR-100/101).
+  price             Decimal?      @db.Decimal(18, 4)
+  currencyId        String?       @map("currency_id") @db.Uuid
+  jurisdictionId    String?       @map("jurisdiction_id") @db.Uuid
+  classification    String        @default("minor_related")
+
+  statusHistory BookingStatusHistory[]
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  recordVersion Int       @default(1) @map("record_version")
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([status])
+  @@index([tutorId, status])
+  @@index([scheduledStart])
+  @@map("booking")
+}
+
+model BookingStatusHistory {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId  String        @map("booking_id") @db.Uuid
+  fromStatus BookingStatus? @map("from_status")
+  toStatus   BookingStatus @map("to_status")
+  changedAt  DateTime      @default(now()) @map("changed_at") @db.Timestamptz(6)
+  changedBy  String?       @map("changed_by") @db.Uuid
+  reason     String?
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+  @@index([bookingId, changedAt])
+  @@map("booking_status_history")
+}
+
+// =====================================================================
+// PHASE 3 — LEARNING DELIVERY, COMMUNICATION, INTELLIGENCE
+// Courses/Programs/Paths, Resources/Notes, Assignments, Assessments/Quizzes,
+// Live Sessions, Certificates, AI. Appended via governed migration (DB Arch
+// §22-23). Cross-references to prior tables use SCALAR FKs (enforced at DB
+// level) so no completed model is modified. AI/Video stay provider-independent
+// (Constitution Art. VII) — no vendor concept is stored beyond an opaque ref.
+// =====================================================================
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+enum EnrollableType {
+  COURSE
+  PROGRAM
+  PATH
+}
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+}
+enum AssignmentStatus {
+  OPEN
+  SUBMITTED
+  GRADED
+  CLOSED
+}
+enum AssessmentKind {
+  ASSESSMENT
+  QUIZ
+}
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  TEXT
+}
+enum LiveSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+}
+enum AICapability {
+  ASSISTANT
+  RECOMMENDATION
+}
+
+// ---------- Curriculum ----------
+model Course {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title          String
+  description    String?      @db.Text
+  subject        String
+  ownerAccountId String       @map("owner_account_id") @db.Uuid
+  status         CourseStatus @default(DRAFT)
+  jurisdictionId String?      @map("jurisdiction_id") @db.Uuid
+
+  modules CourseModule[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([ownerAccountId])
+  @@index([subject])
+  @@index([status])
+  @@map("course")
+}
+
+model CourseModule {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId      String  @map("course_id") @db.Uuid
+  title         String
+  sequenceOrder Int     @map("sequence_order")
+  contentRef    String? @map("content_ref")
+
+  course Course @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([courseId, sequenceOrder])
+  @@index([courseId])
+  @@map("course_module")
+}
+
+model Program {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title              String
+  description        String?      @db.Text
+  ownerAccountId     String       @map("owner_account_id") @db.Uuid
+  educationalSystemId String?     @map("educational_system_id") @db.Uuid
+  status             CourseStatus @default(DRAFT)
+
+  courses ProgramCourse[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([ownerAccountId])
+  @@index([status])
+  @@map("program")
+}
+
+model ProgramCourse {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  programId     String @map("program_id") @db.Uuid
+  courseId      String @map("course_id") @db.Uuid // -> course(id)
+  sequenceOrder Int    @map("sequence_order")
+
+  program Program @relation(fields: [programId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([programId, sequenceOrder])
+  @@index([programId])
+  @@index([courseId])
+  @@map("program_course")
+}
+
+model LearningPath {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title          String
+  description    String?      @db.Text
+  ownerAccountId String       @map("owner_account_id") @db.Uuid
+  status         CourseStatus @default(DRAFT)
+
+  steps LearningPathStep[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([ownerAccountId])
+  @@map("learning_path")
+}
+
+model LearningPathStep {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pathId        String @map("path_id") @db.Uuid
+  refType       String @map("ref_type") // course|assessment|resource
+  refId         String? @map("ref_id") @db.Uuid
+  title         String
+  sequenceOrder Int    @map("sequence_order")
+
+  path LearningPath @relation(fields: [pathId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([pathId, sequenceOrder])
+  @@index([pathId])
+  @@map("learning_path_step")
+}
+
+model Enrollment {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String           @map("student_id") @db.Uuid // -> student_profile(id)
+  enrollableType EnrollableType   @map("enrollable_type")
+  enrollableId   String           @map("enrollable_id") @db.Uuid
+  status         EnrollmentStatus @default(ACTIVE)
+  enrolledAt     DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  classification String           @default("minor_related")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([studentId, enrollableType, enrollableId])
+  @@index([studentId])
+  @@index([enrollableType, enrollableId])
+  @@map("enrollment")
+}
+
+// ---------- Resources / Files / Notes ----------
+model Resource {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerAccountId String  @map("owner_account_id") @db.Uuid
+  title          String
+  description    String? @db.Text
+  // Opaque storage reference (via FileStorage port). Access-controlled; sensitive
+  // resources encrypted at rest (DB Arch §13, §21).
+  storageReference String @map("storage_reference")
+  contentType    String  @map("content_type")
+  courseId       String? @map("course_id") @db.Uuid
+  classification String  @default("operational")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([ownerAccountId])
+  @@index([courseId])
+  @@map("resource")
+}
+
+model Note {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorAccountId String  @map("author_account_id") @db.Uuid
+  title           String?
+  body            String  @db.Text
+  contextType     String? @map("context_type") // course|session|assignment...
+  contextId       String? @map("context_id") @db.Uuid
+  classification  String  @default("personal")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([authorAccountId])
+  @@index([contextType, contextId])
+  @@map("note")
+}
+
+// ---------- Assignments / Homework ----------
+model Assignment {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String
+  description String?          @db.Text
+  courseId    String?          @map("course_id") @db.Uuid
+  assignedByAccountId String   @map("assigned_by_account_id") @db.Uuid
+  studentId   String           @map("student_id") @db.Uuid // -> student_profile(id)
+  dueAt       DateTime?        @map("due_at") @db.Timestamptz(6)
+  status      AssignmentStatus @default(OPEN)
+  classification String        @default("minor_related")
+
+  submissions AssignmentSubmission[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
+  @@map("assignment")
+}
+
+model AssignmentSubmission {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assignmentId     String  @map("assignment_id") @db.Uuid
+  studentId        String  @map("student_id") @db.Uuid
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
+  contentReference String? @map("content_reference")
+  status           String  @default("draft")
+  feedback         String? @db.Text
+  score            Decimal? @db.Decimal(18, 4)
+  classification   String  @default("minor_related")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([assignmentId])
+  @@index([studentId])
+  @@map("assignment_submission")
+}
+
+// ---------- Assessments / Quizzes ----------
+model Assessment {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title          String
+  ownerAccountId String         @map("owner_account_id") @db.Uuid
+  kind           AssessmentKind @default(ASSESSMENT)
+  status         CourseStatus   @default(DRAFT)
+  courseId       String?        @map("course_id") @db.Uuid
+
+  questions   AssessmentQuestion[]
+  submissions AssessmentSubmission[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([ownerAccountId])
+  @@index([kind])
+  @@index([status])
+  @@map("assessment")
+}
+
+model AssessmentQuestion {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId  String       @map("assessment_id") @db.Uuid
+  prompt        String       @db.Text
+  questionType  QuestionType @map("question_type")
+  options       Json?
+  // Answer key — evaluated server-side, never exposed to students (privacy).
+  answerKey     Json?        @map("answer_key")
+  points        Int          @default(1)
+  sequenceOrder Int          @map("sequence_order")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([assessmentId, sequenceOrder])
+  @@index([assessmentId])
+  @@map("assessment_question")
+}
+
+model AssessmentSubmission {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId  String    @map("assessment_id") @db.Uuid
+  studentId     String    @map("student_id") @db.Uuid // -> student_profile(id)
+  submittedAt   DateTime? @map("submitted_at") @db.Timestamptz(6)
+  status        String    @default("in_progress")
+  score         Decimal?  @db.Decimal(18, 4)
+  maxScore      Decimal?  @map("max_score") @db.Decimal(18, 4)
+  classification String   @default("minor_related")
+
+  assessment Assessment          @relation(fields: [assessmentId], references: [id])
+  answers    AssessmentAnswer[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([assessmentId])
+  @@index([studentId])
+  @@map("assessment_submission")
+}
+
+model AssessmentAnswer {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId String  @map("submission_id") @db.Uuid
+  questionId   String  @map("question_id") @db.Uuid
+  answer       Json?
+  isCorrect    Boolean? @map("is_correct")
+  awardedPoints Int?    @map("awarded_points")
+
+  submission AssessmentSubmission @relation(fields: [submissionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([submissionId, questionId])
+  @@index([submissionId])
+  @@map("assessment_answer")
+}
+
+// ---------- Live Sessions ----------
+model LiveSession {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId      String?           @map("booking_id") @db.Uuid // -> booking(id)
+  tutorId        String            @map("tutor_id") @db.Uuid
+  studentId      String            @map("student_id") @db.Uuid
+  scheduledStart DateTime          @map("scheduled_start") @db.Timestamptz(6)
+  scheduledEnd   DateTime          @map("scheduled_end") @db.Timestamptz(6)
+  actualStart    DateTime?         @map("actual_start") @db.Timestamptz(6)
+  actualEnd      DateTime?         @map("actual_end") @db.Timestamptz(6)
+  status         LiveSessionStatus @default(SCHEDULED)
+  // Opaque media-provider reference. The provider is a PTD behind a port; no
+  // vendor concept leaks into the domain (Constitution Art. VII).
+  mediaReference String?           @map("media_reference")
+  classification String            @default("minor_related")
+
+  attendance SessionAttendance[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([tutorId])
+  @@index([studentId])
+  @@index([status, scheduledStart])
+  @@map("live_session")
+}
+
+model SessionAttendance {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String    @map("session_id") @db.Uuid
+  participantAccountId String   @map("participant_account_id") @db.Uuid
+  joinedAt            DateTime? @map("joined_at") @db.Timestamptz(6)
+  leftAt              DateTime? @map("left_at") @db.Timestamptz(6)
+  attendanceStatus    String    @default("absent") @map("attendance_status")
+
+  session LiveSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@unique([sessionId, participantAccountId])
+  @@index([sessionId])
+  @@map("session_attendance")
+}
+
+// ---------- Certificates ----------
+model Certificate {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId     String            @map("student_id") @db.Uuid // -> student_profile(id)
+  title         String
+  issuedForType String            @map("issued_for_type") // course|program|path
+  issuedForId   String?           @map("issued_for_id") @db.Uuid
+  serialNumber  String            @unique @map("serial_number")
+  issuedAt      DateTime          @default(now()) @map("issued_at") @db.Timestamptz(6)
+  status        CertificateStatus @default(ISSUED)
+  classification String           @default("minor_related")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([studentId])
+  @@index([issuedForType, issuedForId])
+  @@map("certificate")
+}
+
+// ---------- AI (provider-independent — Art. VII) ----------
+model AIInteraction {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestorAccountId String     @map("requestor_account_id") @db.Uuid
+  capability        AICapability
+  providerKey       String?     @map("provider_key") // opaque; adapter-resolved
+  contextReference  String?     @map("context_reference")
+  status            String      @default("completed")
+  occurredAt        DateTime    @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  classification    String      @default("personal")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy String?  @map("deleted_by") @db.Uuid
+  recordVersion Int  @default(1) @map("record_version")
+
+  @@index([requestorAccountId])
+  @@index([capability, occurredAt])
+  @@map("ai_interaction")
+}
