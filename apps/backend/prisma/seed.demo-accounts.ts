@@ -1,20 +1,27 @@
 /* eslint-disable no-console */
 /**
- * DEMO login accounts — one per actor role so you can sign in and experience each
- * side of the platform (student, parent, tutor). Idempotent by email.
+ * DEMO login accounts — one per role (actor AND operational) so you can sign in
+ * and experience every side of the platform. Idempotent by email.
  *
- * Creates identity + password credential + account + role + a matching profile.
- * The tutor also gets a VERIFIED profile with an offering and availability, so it
- * appears in the marketplace and can be booked.
+ * Creates identity + password credential + account + role (+ a matching profile
+ * for the three actor roles). The tutor also gets a VERIFIED profile with an
+ * offering and availability, so it appears in the marketplace and can be booked.
+ * Operational roles (super_admin/admin/moderator/finance/support) have no
+ * profile model in the domain — the role grant alone is enough for them.
  *
  * Run (from repo root, database up):
  *   $env:DATABASE_URL="postgresql://edu_app:change_me_in_local_only@localhost:5432/edu_platform?schema=public"
  *   pnpm --filter @edu/backend exec ts-node --transpile-only prisma/seed.demo-accounts.ts
  *
  * Logins created:
- *   student@demo.edu / Student12345!
- *   parent@demo.edu  / Parent12345!
- *   tutor@demo.edu   / Tutor12345!
+ *   superadmin@demo.edu / SuperAdmin12345!
+ *   admin@demo.edu       / Admin12345!
+ *   moderator@demo.edu   / Moderator12345!
+ *   finance@demo.edu     / Finance12345!
+ *   support@demo.edu     / Support12345!
+ *   student@demo.edu     / Student12345!
+ *   parent@demo.edu      / Parent12345!
+ *   tutor@demo.edu        / Tutor12345!
  */
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -23,7 +30,9 @@ const prisma = new PrismaClient();
 
 async function baseAccount(email: string, name: string, password: string, roleName: string): Promise<string | null> {
   const normalized = email.toLowerCase().trim();
-  const existing = await prisma.identity.findUnique({ where: { primaryEmail: normalized } });
+  // findFirst, not findUnique: primaryEmail is enforced unique only among live
+  // rows via a partial index (P0-2), so it's no longer a Prisma @unique field.
+  const existing = await prisma.identity.findFirst({ where: { primaryEmail: normalized, isDeleted: false } });
   if (existing) { console.log(`  • ${name} already exists — skipping.`); return null; }
 
   const secretReference = await argon2.hash(password, { type: argon2.argon2id });
@@ -57,6 +66,13 @@ function upcomingSlots(): { startAt: Date; endAt: Date }[] {
 async function main(): Promise<void> {
   console.log('Seeding demo login accounts...');
 
+  // Operational roles — role grant only, no profile model in the domain.
+  await baseAccount('superadmin@demo.edu', 'Demo Super Admin', 'SuperAdmin12345!', 'super_admin');
+  await baseAccount('admin@demo.edu', 'Demo Admin', 'Admin12345!', 'admin');
+  await baseAccount('moderator@demo.edu', 'Demo Moderator', 'Moderator12345!', 'moderator');
+  await baseAccount('finance@demo.edu', 'Demo Finance', 'Finance12345!', 'finance');
+  await baseAccount('support@demo.edu', 'Demo Support', 'Support12345!', 'support');
+
   const studentId = await baseAccount('student@demo.edu', 'Demo Student', 'Student12345!', 'student');
   if (studentId) await prisma.studentProfile.create({ data: { accountId: studentId, isMinor: false } });
 
@@ -79,9 +95,14 @@ async function main(): Promise<void> {
   }
 
   console.log('Demo accounts complete.');
-  console.log('  student@demo.edu / Student12345!');
-  console.log('  parent@demo.edu  / Parent12345!');
-  console.log('  tutor@demo.edu   / Tutor12345!');
+  console.log('  superadmin@demo.edu / SuperAdmin12345!  (super_admin)');
+  console.log('  admin@demo.edu       / Admin12345!       (admin)');
+  console.log('  moderator@demo.edu   / Moderator12345!   (moderator)');
+  console.log('  finance@demo.edu     / Finance12345!     (finance)');
+  console.log('  support@demo.edu     / Support12345!     (support)');
+  console.log('  student@demo.edu     / Student12345!     (student)');
+  console.log('  parent@demo.edu      / Parent12345!      (parent)');
+  console.log('  tutor@demo.edu       / Tutor12345!       (tutor)');
 }
 
 main()
