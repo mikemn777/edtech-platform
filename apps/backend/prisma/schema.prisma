@@ -325,8 +325,14 @@ model ConfigurationVersion {
 
 model Identity {
   id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  primaryEmail String?        @unique @map("primary_email") @db.Citext
-  primaryPhone String?        @unique @map("primary_phone")
+  // NOT @unique: uniqueness is enforced by a PARTIAL unique index
+  // (WHERE is_deleted = false) added in migration 0000000000004 — Prisma's
+  // schema DSL cannot express a partial index, and a plain @unique would
+  // permanently block re-registration with the same email/phone after a
+  // soft delete (P0-2; DB Master Architecture §8). Query with isDeleted:
+  // false via findFirst, not findUnique.
+  primaryEmail String?        @map("primary_email") @db.Citext
+  primaryPhone String?        @map("primary_phone")
   status       IdentityStatus @default(ACTIVE)
 
   account     UserAccount?
@@ -345,6 +351,8 @@ model Identity {
 
   @@index([status])
   @@index([isDeleted])
+  @@index([primaryEmail])
+  @@index([primaryPhone])
   @@map("identity")
 }
 
@@ -562,9 +570,13 @@ model AccountRelationship {
   deletedBy     String?   @map("deleted_by") @db.Uuid
   recordVersion Int       @default(1) @map("record_version")
 
-  @@unique([fromAccountId, toAccountId, relationshipType])
+  // NOT @@unique: see Identity.primaryEmail — enforced by a partial unique
+  // index (migration 0000000000004) so removing then re-adding the same
+  // relationship (e.g. guardianship revoke + re-link) doesn't collide with
+  // the soft-deleted row.
   @@index([fromAccountId])
   @@index([toAccountId])
+  @@index([fromAccountId, toAccountId, relationshipType])
   @@map("account_relationship")
 }
 
@@ -627,7 +639,10 @@ enum AvailabilityStatus {
 
 model StudentProfile {
   id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId            String    @unique @map("account_id") @db.Uuid
+  // NOT @unique: see Identity.primaryEmail — enforced by a partial unique
+  // index (migration 0000000000004) so a soft-deleted profile doesn't
+  // permanently block recreating one for the same account.
+  accountId            String    @map("account_id") @db.Uuid
   dateOfBirth          DateTime? @map("date_of_birth") @db.Date
   // Minor determination rule is Pending Business/Legal Decision (Art. VI);
   // absent an authoritative rule, treated as minor (most protective — BR-003).
@@ -657,7 +672,8 @@ model StudentProfile {
 
 model ParentProfile {
   id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId       String  @unique @map("account_id") @db.Uuid
+  // NOT @unique: see Identity.primaryEmail (partial unique index, migration 0000000000004).
+  accountId       String  @map("account_id") @db.Uuid
   oversightContext Json?  @map("oversight_context")
   classification  String  @default("personal")
 
@@ -678,7 +694,8 @@ model ParentProfile {
 
 model TutorProfile {
   id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId          String             @unique @map("account_id") @db.Uuid
+  // NOT @unique: see Identity.primaryEmail (partial unique index, migration 0000000000004).
+  accountId          String             @map("account_id") @db.Uuid
   headline           String?
   bio                String?            @db.Text
   verificationStatus VerificationStatus @default(UNVERIFIED) @map("verification_status")
