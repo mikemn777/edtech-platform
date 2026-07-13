@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { getTranslator } from '@/lib/i18n';
 import { useSession, homePathForRoles } from '@/lib/session';
 import ThemeToggle from './ThemeToggle';
+import RefreshButton from './RefreshButton';
 import LangSwitcher from './LangSwitcher';
 import { Menu, Grid } from './icons';
 
@@ -35,6 +36,7 @@ export default function SiteHeader({ lang }: { lang: string }) {
 
         <div className="row gap-1">
           <a href={`/${lang}/register`} className="nav-link-plain hide-sm">{t('footer.becomeTutor')}</a>
+          <RefreshButton lang={lang} />
           <ThemeToggle />
           <LangSwitcher current={lang} />
           {session.authenticated ? (

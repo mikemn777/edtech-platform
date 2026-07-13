@@ -6,6 +6,7 @@ import { useSession } from '@/lib/session';
 import { getTranslator } from '@/lib/i18n';
 import ThemeToggle from './ThemeToggle';
 import BackButton from './BackButton';
+import RefreshButton from './RefreshButton';
 import LangSwitcher from './LangSwitcher';
 import BrandLoader from './BrandLoader';
 import { Logout } from './icons';
@@ -75,6 +76,7 @@ export default function DashboardShell({
         <header className="app-topbar">
           <div className="row gap-1"><BackButton lang={lang} /><strong>{title}</strong></div>
           <div className="row gap-1">
+            <RefreshButton lang={lang} />
             <ThemeToggle />
             <LangSwitcher current={lang} />
             <div className="avatar" title={session.email ?? ''}>{initials}</div>

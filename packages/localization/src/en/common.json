@@ -455,5 +455,6 @@
   "qz.err.save": "Could not save the quiz. Please try again.",
   "qz.err.load": "Could not load the quiz.",
   "qz.err.all": "Please answer every question.",
-  "qz.err.submit": "Could not submit. Please try again."
+  "qz.err.submit": "Could not submit. Please try again.",
+  "common.refresh": "Refresh"
 }

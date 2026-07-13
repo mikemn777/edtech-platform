@@ -76,3 +76,15 @@ export const Heart = (p: SVGProps<SVGSVGElement>) => (
 export const HeartFilled = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ fill: 'currentColor', stroke: 'none', ...p })}><path d="M12 20s-7-4.35-9.5-8.5C1 8 2.5 4.5 6 4.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.5 0 5 3.5 3.5 7C19 15.65 12 20 12 20z" /></svg>
 );
+export const Refresh = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8M21 8V3M21 8h-5" /><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 16v5M3 16h5" /></svg>
+);
+export const FileText = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M8 13h8M8 17h5" /></svg>
+);
+export const Folder = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+);
+export const Award = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="8" r="5.5" /><path d="M8.2 12.8 7 21l5-2.5 5 2.5-1.2-8.2" /></svg>
+);

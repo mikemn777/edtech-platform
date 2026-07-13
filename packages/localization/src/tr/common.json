@@ -455,5 +455,6 @@
   "qz.err.save": "Test kaydedilemedi. Lütfen tekrar deneyin.",
   "qz.err.load": "Test yüklenemedi.",
   "qz.err.all": "Lütfen her soruyu yanıtlayın.",
-  "qz.err.submit": "Gönderilemedi. Lütfen tekrar deneyin."
+  "qz.err.submit": "Gönderilemedi. Lütfen tekrar deneyin.",
+  "common.refresh": "Yenile"
 }
