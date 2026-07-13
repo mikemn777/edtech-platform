@@ -40,10 +40,11 @@ export default function StudentQuizzes({ params }: { params: { lang: string } })
   async function onSubmit() {
     if (!taking) return;
     const qids = taking.questions.map((q) => q.id);
-    if (qids.some((id) => answers[id] === undefined)) { setErr(t('qz.err.all')); return; }
+    const selectedIndexes = qids.map((id) => answers[id]).filter((v): v is number => v !== undefined);
+    if (selectedIndexes.length !== qids.length) { setErr(t('qz.err.all')); return; }
     setErr(null); setSubmitting(true);
     try {
-      const r = await submitQuiz(taking.id, qids, qids.map((id) => answers[id]));
+      const r = await submitQuiz(taking.id, qids, selectedIndexes);
       setResult(r); setTaking(null); await reload();
     } catch { setErr(t('qz.err.submit')); } finally { setSubmitting(false); }
   }

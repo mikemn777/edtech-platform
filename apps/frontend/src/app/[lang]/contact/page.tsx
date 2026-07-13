@@ -17,7 +17,7 @@ export default function ContactPage({ params }: { params: { lang: string } }) {
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         <div className="card">
           {sent ? (
-            <div className="alert alert-ok">Thanks! Your message has been noted — we'll get back to you soon.</div>
+            <div className="alert alert-ok">Thanks! Your message has been noted — we&apos;ll get back to you soon.</div>
           ) : (
             <form onSubmit={onSubmit}>
               <div className="field"><label className="label">Name</label><input className="input" required /></div>
