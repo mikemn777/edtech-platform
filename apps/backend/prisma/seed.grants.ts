@@ -55,6 +55,12 @@ const PERMS: Perm[] = [
   // restricts start/join/complete/cancel to the two assigned parties.
   { key: 'livesession.session.manage', domain: 'livesession', high: true },
   { key: 'livesession.session.join', domain: 'livesession', high: true },
+  { key: 'resource.resource.manage', domain: 'resource' },
+  { key: 'resource.resource.read', domain: 'resource' },
+  { key: 'note.note.manage', domain: 'note' },
+  { key: 'certificate.certificate.issue', domain: 'certificate', high: true },
+  { key: 'certificate.certificate.read', domain: 'certificate' },
+  { key: 'progress.progress.read', domain: 'progress' },
 ];
 
 const GRANTS: Record<string, string[]> = {
@@ -68,10 +74,12 @@ const GRANTS: Record<string, string[]> = {
     'assignment.assignment.read', 'assignment.submission.manage',
     'assessment.assessment.read', 'assessment.submission.manage',
     'livesession.session.join',
+    'note.note.manage', 'certificate.certificate.read', 'progress.progress.read',
   ],
   parent: [
     'marketplace.favorite.manage', 'parent.child.monitor', 'booking.request.read',
     'relationship.link.read', 'relationship.link.manage',
+    'note.note.manage',
   ],
   tutor: [
     'tutor.profile.read', 'tutor.profile.manage', 'tutor.availability.manage',
@@ -80,6 +88,8 @@ const GRANTS: Record<string, string[]> = {
     'assignment.assignment.manage', 'assignment.assignment.read',
     'assessment.assessment.manage', 'assessment.assessment.read',
     'livesession.session.manage', 'livesession.session.join',
+    'note.note.manage', 'resource.resource.manage', 'resource.resource.read',
+    'certificate.certificate.issue',
   ],
 };
 

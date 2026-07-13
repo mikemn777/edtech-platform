@@ -33,6 +33,8 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { TutorCatalogModule } from './modules/tutor-catalog/tutor-catalog.module';
 import { TutorDashboardModule } from './modules/tutor-dashboard/tutor-dashboard.module';
 import { LearningModule } from './modules/learning/learning.module';
+import { AssignmentsModule } from './modules/assignments/assignments.module';
+import { AssessmentsModule } from './modules/assessments/assessments.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { ChildMonitoringModule } from './modules/child-monitoring/child-monitoring.module';
 import { BookingModule } from './modules/booking/booking.module';
@@ -42,6 +44,10 @@ import { CurriculumModule } from './modules/curriculum/curriculum.module';
 import { LiveSessionsModule } from './modules/live-sessions/live-sessions.module';
 import { NotificationChannelsModule } from './modules/notification-channels/notification-channels.module';
 import { AIModule } from './modules/ai/ai.module';
+import { ResourcesModule } from './modules/resources/resources.module';
+import { NotesModule } from './modules/notes/notes.module';
+import { CertificatesModule } from './modules/certificates/certificates.module';
+import { StudentProgressModule } from './modules/student-progress/student-progress.module';
 
 /**
  * Root module. Composes the platform foundation and the Phase 1 domain modules
@@ -85,6 +91,8 @@ import { AIModule } from './modules/ai/ai.module';
     TutorCatalogModule,
     TutorDashboardModule,
     LearningModule,
+    AssignmentsModule,
+    AssessmentsModule,
     FavoritesModule,
     ChildMonitoringModule,
     BookingModule,
@@ -93,6 +101,10 @@ import { AIModule } from './modules/ai/ai.module';
     LiveSessionsModule,
     NotificationChannelsModule,
     AIModule,
+    ResourcesModule,
+    NotesModule,
+    CertificatesModule,
+    StudentProgressModule,
   ],
 })
 export class AppModule implements NestModule {
