@@ -17,6 +17,12 @@ export interface ApiRequestOptions {
   signal?: AbortSignal;
 }
 
+/** Build a full URL for a versioned API path — for callers that need the raw
+ * fetch (e.g. binary/blob downloads) instead of the JSON-only apiFetch. */
+export function buildApiUrl(path: string): string {
+  return `${API_BASE_URL}/${API_VERSION}/${path}`;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,

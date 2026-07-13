@@ -8,7 +8,8 @@ import { ensureStudentProfileId } from '@/lib/booking';
 import { listGoals, type Goal } from '@/lib/goals';
 import { listEnrollments, type EnrollmentRow } from '@/lib/courses';
 import { authed } from '@/lib/useApi';
-import { Chart, Check, Book, Calendar } from '@/components/icons';
+import { getProgressSummary, type ProgressSummary } from '@/lib/progress';
+import { Chart, Check, Book, Calendar, Award } from '@/components/icons';
 
 interface ProgressRow { id: string; metricKey: string; value: number | null; note: string | null; recordedAt: string }
 
@@ -19,18 +20,20 @@ export default function StudentProgress({ params }: { params: { lang: string } }
   const [goals, setGoals] = useState<Goal[]>([]);
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [records, setRecords] = useState<ProgressRow[]>([]);
+  const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
         const sid = await ensureStudentProfileId();
-        const [g, e, r] = await Promise.all([
+        const [g, e, r, s] = await Promise.all([
           listGoals(sid).catch(() => [] as Goal[]),
           listEnrollments(sid).catch(() => [] as EnrollmentRow[]),
           authed<ProgressRow[]>(`students/${sid}/progress`).catch(() => [] as ProgressRow[]),
+          getProgressSummary(sid).catch(() => null as ProgressSummary | null),
         ]);
-        setGoals(g); setEnrollments(e); setRecords(r);
+        setGoals(g); setEnrollments(e); setRecords(r); setSummary(s);
       } finally { setLoading(false); }
     })();
   }, []);
@@ -53,6 +56,23 @@ export default function StudentProgress({ params }: { params: { lang: string } }
             <div className="card"><div className="stat"><span className="n">{activeGoals}</span><span className="l">{t('progress.stat.activeGoals')}</span></div></div>
             <div className="card"><div className="stat"><span className="n">{activeCourses}</span><span className="l">{t('progress.stat.courses')}</span></div></div>
           </div>
+
+          {summary && (
+            <>
+              <h3 className="mt-4">{t('progress.summary.title')}</h3>
+              <div className="grid cols-4 mt-2">
+                <div className="card"><div className="stat"><span className="n">{summary.assignments.averageScore !== null ? Math.round(summary.assignments.averageScore) : '—'}</span><span className="l">{t('progress.summary.hwAvg')}</span></div></div>
+                <div className="card"><div className="stat"><span className="n">{summary.assessments.averageScore !== null ? Math.round(summary.assessments.averageScore) : '—'}</span><span className="l">{t('progress.summary.qzAvg')}</span></div></div>
+                <div className="card"><div className="stat"><span className="n">{Object.values(summary.enrollments).reduce((a, b) => a + b, 0)}</span><span className="l">{t('progress.summary.enrollments')}</span></div></div>
+                <div className="card"><div className="stat"><span className="n">{summary.certificates.ISSUED ?? 0}</span><span className="l">{t('progress.summary.certificates')}</span></div></div>
+              </div>
+              {(summary.certificates.ISSUED ?? 0) > 0 && (
+                <p className="mt-2">
+                  <a href={`/${lang}/student/certificates`} className="btn btn-outline btn-sm"><Award width={14} height={14} /> {t('progress.summary.viewCerts')}</a>
+                </p>
+              )}
+            </>
+          )}
 
           <h3 className="mt-4">{t('progress.timeline')}</h3>
           {goals.length === 0 && records.length === 0 ? (
