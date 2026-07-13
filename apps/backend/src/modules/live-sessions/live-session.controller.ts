@@ -16,36 +16,36 @@ export class LiveSessionController {
 
   @Post()
   @RequirePermissionKeys(PHASE3_PERMISSIONS.LIVE_SESSION_MANAGE)
-  @ApiOperation({ summary: 'Create a live session (verified tutors only)' })
+  @ApiOperation({ summary: 'Create a live session (the verified tutor themselves, or admin)' })
   create(@Body() dto: CreateLiveSessionDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.sessions.create(dto, a.accountId, r.correlationId);
+    return this.sessions.create(dto, a, r.correlationId);
   }
 
   @Post(':id/start')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.LIVE_SESSION_MANAGE)
-  @ApiOperation({ summary: 'Start a session (allocates a media room via the video port)' })
+  @ApiOperation({ summary: 'Start a session (the assigned tutor, or admin; allocates a media room via the video port)' })
   start(@Param('id') id: string, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.sessions.start(id, a.accountId, r.correlationId);
+    return this.sessions.start(id, a, r.correlationId);
   }
 
   @Post(':id/join')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.LIVE_SESSION_JOIN)
-  @ApiOperation({ summary: 'Join an in-progress session (records attendance, returns opaque media grant)' })
+  @ApiOperation({ summary: 'Join an in-progress session (assigned tutor/student/guardian only; records attendance, returns opaque media grant)' })
   join(@Param('id') id: string, @CurrentUser() a: AuthenticatedPrincipal) {
-    return this.sessions.join(id, a.accountId);
+    return this.sessions.join(id, a);
   }
 
   @Post(':id/complete')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.LIVE_SESSION_MANAGE)
-  @ApiOperation({ summary: 'Complete a session' })
+  @ApiOperation({ summary: 'Complete a session (the assigned tutor, or admin)' })
   complete(@Param('id') id: string, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.sessions.transition(id, 'COMPLETED', a.accountId, r.correlationId);
+    return this.sessions.transition(id, 'COMPLETED', a, r.correlationId);
   }
 
   @Post(':id/cancel')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.LIVE_SESSION_MANAGE)
-  @ApiOperation({ summary: 'Cancel a session' })
+  @ApiOperation({ summary: 'Cancel a session (the assigned tutor, or admin)' })
   cancel(@Param('id') id: string, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.sessions.transition(id, 'CANCELLED', a.accountId, r.correlationId);
+    return this.sessions.transition(id, 'CANCELLED', a, r.correlationId);
   }
 }

@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
 import { canTransition, type BookingStatus } from '../domain/booking-status';
 import { slotIsBookable, type TimeWindow } from '../domain/availability-engine';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type { CreateBookingDto } from '../contracts/booking.dto';
 
 /**
@@ -17,15 +19,21 @@ import type { CreateBookingDto } from '../contracts/booking.dto';
  * (who may book for a minor) are Pending Business Decisions: bookings are created
  * as REQUESTED and no money is processed; where a minor-consent rule would be
  * required it is not invented (BR-100/102/003).
+ *
+ * Object-level authorization (P0-1): every route is additionally checked
+ * against the specific student/tutor on the booking, not just the caller's
+ * general permission grant (Roles §3.3 self/relationship scope).
  */
 @Injectable()
 export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
-  async request(dto: CreateBookingDto, actorAccountId: string, correlationId?: string) {
+  async request(dto: CreateBookingDto, actor: AuthenticatedPrincipal, correlationId?: string) {
+    const actorAccountId = actor.accountId;
     const start = new Date(dto.scheduledStart);
     const end = new Date(dto.scheduledEnd);
     const slot: TimeWindow = { startAt: start, endAt: end };
@@ -37,6 +45,12 @@ export class BookingService {
     ]);
     if (!student) throw DomainError.notFound('Student profile not found.');
     if (!tutor) throw DomainError.notFound('Tutor profile not found.');
+
+    // Only the student themselves, an active guardian, or an operational role
+    // may request a booking for this student (A2 — was previously unbounded).
+    if (!(await this.policy.canActOnStudentAccount(actor, student.accountId))) {
+      throw DomainError.forbidden('You may only book on behalf of your own student profile.');
+    }
 
     // Eligibility gate (BR-002).
     if (tutor.verificationStatus !== 'VERIFIED') {
@@ -103,14 +117,16 @@ export class BookingService {
   async transition(
     bookingId: string,
     to: BookingStatus,
-    actorAccountId: string,
+    actor: AuthenticatedPrincipal,
     reason: string | undefined,
     correlationId?: string,
   ) {
+    const actorAccountId = actor.accountId;
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, isDeleted: false },
     });
     if (!booking) throw DomainError.notFound('Booking not found.');
+    await this.assertActorOnBooking(booking, actor);
 
     const from = booking.status as BookingStatus;
     if (!canTransition(from, to)) {
@@ -143,12 +159,13 @@ export class BookingService {
     return { id: updated.id, status: updated.status };
   }
 
-  async getById(bookingId: string) {
+  async getById(bookingId: string, actor: AuthenticatedPrincipal) {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, isDeleted: false },
       include: { statusHistory: { orderBy: { changedAt: 'asc' } } },
     });
     if (!booking) throw DomainError.notFound('Booking not found.');
+    await this.assertActorOnBooking(booking, actor);
     return {
       id: booking.id,
       studentId: booking.studentId,
@@ -165,7 +182,10 @@ export class BookingService {
     };
   }
 
-  async listForTutor(tutorId: string, status?: BookingStatus) {
+  async listForTutor(tutorId: string, actor: AuthenticatedPrincipal, status?: BookingStatus) {
+    if (!(await this.policy.isSelfTutorOrOperational(actor, tutorId))) {
+      throw DomainError.forbidden();
+    }
     const rows = await this.prisma.booking.findMany({
       where: {
         tutorId,
@@ -182,5 +202,22 @@ export class BookingService {
       scheduledEnd: b.scheduledEnd,
       status: b.status,
     }));
+  }
+
+  /** Grants access to a specific booking to the student on it, the tutor on
+   * it (or an active guardian of the student), or an operational role — never
+   * to an arbitrary third permission-holder (A1/A2). */
+  private async assertActorOnBooking(
+    booking: { studentId: string; tutorId: string },
+    actor: AuthenticatedPrincipal,
+  ): Promise<void> {
+    if (this.policy.isOperational(actor)) return;
+    const [student, tutor] = await Promise.all([
+      this.prisma.studentProfile.findFirst({ where: { id: booking.studentId }, select: { accountId: true } }),
+      this.prisma.tutorProfile.findFirst({ where: { id: booking.tutorId }, select: { accountId: true } }),
+    ]);
+    if (this.policy.isSelf(actor, tutor?.accountId)) return;
+    if (student && (await this.policy.canActOnStudentAccount(actor, student.accountId))) return;
+    throw DomainError.forbidden();
   }
 }

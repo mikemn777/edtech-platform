@@ -22,7 +22,7 @@ export class StudentController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.students.create(dto, actor.accountId, req.correlationId);
+    return this.students.create(dto, actor, req.correlationId);
   }
 
   @Get('profiles/me')
@@ -38,20 +38,20 @@ export class StudentController {
 
   @Get('profiles/:id')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.STUDENT_PROFILE_READ)
-  @ApiOperation({ summary: 'Get a student profile by id' })
-  async get(@Param('id') id: string) {
-    return this.students.getById(id);
+  @ApiOperation({ summary: 'Get a student profile by id (own profile, an active guardian, or staff)' })
+  async get(@Param('id') id: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.students.getById(id, actor);
   }
 
   @Patch('profiles/:id')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.STUDENT_PROFILE_MANAGE)
-  @ApiOperation({ summary: 'Update a student profile' })
+  @ApiOperation({ summary: 'Update a student profile (own profile, an active guardian, or staff)' })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateStudentProfileDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.students.update(id, dto, actor.accountId, req.correlationId);
+    return this.students.update(id, dto, actor, req.correlationId);
   }
 }

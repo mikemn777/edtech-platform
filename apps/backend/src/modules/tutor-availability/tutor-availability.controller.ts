@@ -30,18 +30,18 @@ export class TutorAvailabilityController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.availability.create(tutorId, dto, actor.accountId, req.correlationId);
+    return this.availability.create(tutorId, dto, actor, req.correlationId);
   }
 
   @Delete(':availabilityId')
   @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.TUTOR_AVAILABILITY_MANAGE)
-  @ApiOperation({ summary: 'Cancel an availability window' })
+  @ApiOperation({ summary: 'Cancel an availability window (that tutor, or staff, only)' })
   async cancel(
     @Param('availabilityId') availabilityId: string,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.availability.cancel(availabilityId, actor.accountId, req.correlationId);
+    return this.availability.cancel(availabilityId, actor, req.correlationId);
   }
 }

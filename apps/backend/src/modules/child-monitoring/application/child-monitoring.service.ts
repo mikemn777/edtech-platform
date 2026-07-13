@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 
 const GUARDIAN_OF = 'guardian_of';
 
@@ -20,14 +22,22 @@ export class ChildMonitoringService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
   async monitorChild(
     parentAccountId: string,
     studentAccountId: string,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
+    const actorAccountId = principal.accountId;
+    // 0. The caller must BE the parent in the URL (or staff) — otherwise any
+    //    CHILD_MONITOR_READ holder could pass another parent's account id and,
+    //    once guardianship activation rules exist, monitor a child that isn't
+    //    theirs (A1).
+    this.policy.assertIsSelfOrOperational(principal, parentAccountId);
+
     // 1. There must be a guardianship link.
     const link = await this.prisma.accountRelationship.findFirst({
       where: {

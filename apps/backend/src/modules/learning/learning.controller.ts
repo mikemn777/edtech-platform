@@ -24,44 +24,44 @@ export class LearningController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.learning.createGoal(studentId, dto, actor.accountId, req.correlationId);
+    return this.learning.createGoal(studentId, dto, actor, req.correlationId);
   }
 
   @Get('goals')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.STUDENT_GOAL_READ)
-  @ApiOperation({ summary: 'List learning goals' })
-  listGoals(@Param('studentId') studentId: string) {
-    return this.learning.listGoals(studentId);
+  @ApiOperation({ summary: 'List learning goals (own profile, an active guardian, or staff)' })
+  listGoals(@Param('studentId') studentId: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.learning.listGoals(studentId, actor);
   }
 
   @Patch('goals/:goalId/status')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.STUDENT_GOAL_MANAGE)
-  @ApiOperation({ summary: 'Update a goal status' })
+  @ApiOperation({ summary: 'Update a goal status (own profile, an active guardian, or staff)' })
   setGoalStatus(
     @Param('goalId') goalId: string,
     @Body() dto: UpdateGoalStatusDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.learning.setGoalStatus(goalId, dto.status, actor.accountId, req.correlationId);
+    return this.learning.setGoalStatus(goalId, dto.status, actor, req.correlationId);
   }
 
   @Post('progress')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.STUDENT_PROGRESS_MANAGE)
-  @ApiOperation({ summary: 'Record a progress entry' })
+  @ApiOperation({ summary: 'Record a progress entry (own profile, an active guardian, or staff)' })
   recordProgress(
     @Param('studentId') studentId: string,
     @Body() dto: RecordProgressDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.learning.recordProgress(studentId, dto, actor.accountId, req.correlationId);
+    return this.learning.recordProgress(studentId, dto, actor, req.correlationId);
   }
 
   @Get('progress')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.STUDENT_PROGRESS_READ)
-  @ApiOperation({ summary: 'List progress entries' })
-  listProgress(@Param('studentId') studentId: string) {
-    return this.learning.listProgress(studentId);
+  @ApiOperation({ summary: 'List progress entries (own profile, an active guardian, or staff)' })
+  listProgress(@Param('studentId') studentId: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.learning.listProgress(studentId, actor);
   }
 }

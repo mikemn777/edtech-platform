@@ -27,15 +27,15 @@ export class RelationshipController {
     return this.relationships.createGuardianship(
       dto.parentAccountId,
       dto.studentAccountId,
-      actor.accountId,
+      actor,
       req.correlationId,
     );
   }
 
   @Get('parents/:parentAccountId/guardianships')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.RELATIONSHIP_READ)
-  @ApiOperation({ summary: 'List guardianship links for a parent account' })
-  async list(@Param('parentAccountId') parentAccountId: string) {
-    return this.relationships.listForParent(parentAccountId);
+  @ApiOperation({ summary: 'List guardianship links for a parent account (that parent, or staff, only)' })
+  async list(@Param('parentAccountId') parentAccountId: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.relationships.listForParent(parentAccountId, actor);
   }
 }

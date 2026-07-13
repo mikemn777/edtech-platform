@@ -1,31 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type { CreateGoalDto, GoalStatusDto, RecordProgressDto } from '../contracts/learning.dto';
 
 /**
  * Learning service — Learning Goals + Progress Tracking (Business Domain Model
  * §12-13). Learner data is classified minor_related and audited accordingly
  * (Art. VI). Structural correctness only; no invented pedagogy rules.
+ *
+ * Object-level authorization (P0-1): goals/progress are the student's own
+ * data — every route is scoped to the student themselves, an active
+ * guardian, or staff (Roles §3.3).
  */
 @Injectable()
 export class LearningService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
-  private async ensureStudent(studentId: string): Promise<void> {
+  private async assertAccessibleStudent(studentId: string, principal: AuthenticatedPrincipal): Promise<void> {
     const student = await this.prisma.studentProfile.findFirst({
       where: { id: studentId, isDeleted: false },
     });
     if (!student) throw DomainError.notFound('Student profile not found.');
+    if (!(await this.policy.canActOnStudentAccount(principal, student.accountId))) {
+      throw DomainError.forbidden();
+    }
   }
 
   // ---- Goals ----
-  async createGoal(studentId: string, dto: CreateGoalDto, actor: string, correlationId?: string) {
-    await this.ensureStudent(studentId);
+  async createGoal(studentId: string, dto: CreateGoalDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    await this.assertAccessibleStudent(studentId, principal);
+    const actor = principal.accountId;
     const goal = await this.prisma.learningGoal.create({
       data: {
         studentId,
@@ -46,7 +57,8 @@ export class LearningService {
     return { id: goal.id, title: goal.title, status: goal.status };
   }
 
-  async listGoals(studentId: string) {
+  async listGoals(studentId: string, principal: AuthenticatedPrincipal) {
+    await this.assertAccessibleStudent(studentId, principal);
     const rows = await this.prisma.learningGoal.findMany({
       where: { studentId, isDeleted: false },
       orderBy: { createdAt: 'desc' },
@@ -60,9 +72,11 @@ export class LearningService {
     }));
   }
 
-  async setGoalStatus(goalId: string, status: GoalStatusDto, actor: string, correlationId?: string) {
+  async setGoalStatus(goalId: string, status: GoalStatusDto, principal: AuthenticatedPrincipal, correlationId?: string) {
     const goal = await this.prisma.learningGoal.findFirst({ where: { id: goalId, isDeleted: false } });
     if (!goal) throw DomainError.notFound('Goal not found.');
+    if (!(await this.policy.canActOnStudentProfile(principal, goal.studentId))) throw DomainError.forbidden();
+    const actor = principal.accountId;
     const updated = await this.prisma.learningGoal.update({
       where: { id: goalId },
       data: { status, updatedBy: actor, recordVersion: { increment: 1 } },
@@ -80,8 +94,9 @@ export class LearningService {
   }
 
   // ---- Progress Tracking ----
-  async recordProgress(studentId: string, dto: RecordProgressDto, actor: string, correlationId?: string) {
-    await this.ensureStudent(studentId);
+  async recordProgress(studentId: string, dto: RecordProgressDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    await this.assertAccessibleStudent(studentId, principal);
+    const actor = principal.accountId;
     if (dto.goalId) {
       const goal = await this.prisma.learningGoal.findFirst({
         where: { id: dto.goalId, studentId, isDeleted: false },
@@ -109,7 +124,8 @@ export class LearningService {
     return { id: record.id, metricKey: record.metricKey, recordedAt: record.recordedAt };
   }
 
-  async listProgress(studentId: string) {
+  async listProgress(studentId: string, principal: AuthenticatedPrincipal) {
+    await this.assertAccessibleStudent(studentId, principal);
     const rows = await this.prisma.progressRecord.findMany({
       where: { studentId, isDeleted: false },
       orderBy: { recordedAt: 'desc' },

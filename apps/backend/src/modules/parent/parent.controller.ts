@@ -22,25 +22,25 @@ export class ParentController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.parents.create(dto, actor.accountId, req.correlationId);
+    return this.parents.create(dto, actor, req.correlationId);
   }
 
   @Get('profiles/:id')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.PARENT_PROFILE_READ)
-  @ApiOperation({ summary: 'Get a parent profile by id' })
-  async get(@Param('id') id: string) {
-    return this.parents.getById(id);
+  @ApiOperation({ summary: 'Get a parent profile by id (own profile, or staff, only)' })
+  async get(@Param('id') id: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.parents.getById(id, actor);
   }
 
   @Patch('profiles/:id')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.PARENT_PROFILE_MANAGE)
-  @ApiOperation({ summary: 'Update a parent profile' })
+  @ApiOperation({ summary: 'Update a parent profile (own profile, or staff, only)' })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateParentProfileDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.parents.update(id, dto, actor.accountId, req.correlationId);
+    return this.parents.update(id, dto, actor, req.correlationId);
   }
 }

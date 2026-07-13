@@ -1,31 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type { AddLanguageDto, AddSubjectDto, RateUnitDto, SetRateDto } from '../contracts/catalog.dto';
 
 /**
  * Tutor Catalog service — Subjects, Languages, Pricing (Business Domain Model §5).
  * These are professional attributes a tutor manages on their own profile. Money
  * is currency-explicit; the SetRate call requires a valid configured currency.
+ *
+ * Object-level authorization (P0-1): only the tutor themselves (or staff) may
+ * manage their own catalog entries.
  */
 @Injectable()
 export class TutorCatalogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
-  private async ensureTutor(tutorId: string): Promise<void> {
+  /** Confirms the tutor exists AND the caller may manage its catalog (self or staff). */
+  private async assertOwnedTutor(tutorId: string, principal: AuthenticatedPrincipal): Promise<void> {
     const tutor = await this.prisma.tutorProfile.findFirst({
       where: { id: tutorId, isDeleted: false },
     });
     if (!tutor) throw DomainError.notFound('Tutor profile not found.');
+    this.policy.assertIsSelfOrOperational(principal, tutor.accountId);
   }
 
   // ---- Subjects ----
-  async addSubject(tutorId: string, dto: AddSubjectDto, actor: string, correlationId?: string) {
-    await this.ensureTutor(tutorId);
+  async addSubject(tutorId: string, dto: AddSubjectDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    await this.assertOwnedTutor(tutorId, principal);
+    const actor = principal.accountId;
     const subject = dto.subject.toLowerCase().trim();
     const existing = await this.prisma.tutorSubject.findUnique({
       where: { tutorId_subject: { tutorId, subject } },
@@ -57,9 +66,11 @@ export class TutorCatalogService {
     return rows.map((r) => ({ id: r.id, subject: r.subject }));
   }
 
-  async removeSubject(subjectId: string, actor: string, correlationId?: string) {
+  async removeSubject(subjectId: string, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const row = await this.prisma.tutorSubject.findFirst({ where: { id: subjectId, isDeleted: false } });
     if (!row) throw DomainError.notFound('Subject not found.');
+    if (!(await this.policy.isSelfTutorOrOperational(principal, row.tutorId))) throw DomainError.forbidden();
     await this.prisma.tutorSubject.update({
       where: { id: subjectId },
       data: { isDeleted: true, deletedAt: new Date(), deletedBy: actor },
@@ -75,8 +86,9 @@ export class TutorCatalogService {
   }
 
   // ---- Languages ----
-  async addLanguage(tutorId: string, dto: AddLanguageDto, actor: string, correlationId?: string) {
-    await this.ensureTutor(tutorId);
+  async addLanguage(tutorId: string, dto: AddLanguageDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    await this.assertOwnedTutor(tutorId, principal);
+    const actor = principal.accountId;
     const language = await this.prisma.language.findFirst({
       where: { id: dto.languageId, isDeleted: false, status: 'active' },
     });
@@ -114,8 +126,9 @@ export class TutorCatalogService {
   }
 
   // ---- Pricing / Rate ----
-  async setRate(tutorId: string, dto: SetRateDto, actor: string, correlationId?: string) {
-    await this.ensureTutor(tutorId);
+  async setRate(tutorId: string, dto: SetRateDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    await this.assertOwnedTutor(tutorId, principal);
+    const actor = principal.accountId;
     const currency = await this.prisma.currency.findFirst({
       where: { id: dto.currencyId, isDeleted: false },
     });

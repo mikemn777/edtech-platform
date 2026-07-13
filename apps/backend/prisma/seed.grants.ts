@@ -45,6 +45,16 @@ const PERMS: Perm[] = [
   { key: 'tutor.verification.decide', domain: 'tutor', high: true },
   { key: 'relationship.link.read', domain: 'relationships' },
   { key: 'relationship.link.manage', domain: 'relationships', high: true },
+  { key: 'assignment.assignment.manage', domain: 'assignment' },
+  { key: 'assignment.assignment.read', domain: 'assignment' },
+  { key: 'assignment.submission.manage', domain: 'assignment' },
+  { key: 'assessment.assessment.manage', domain: 'assessment' },
+  { key: 'assessment.assessment.read', domain: 'assessment' },
+  { key: 'assessment.submission.manage', domain: 'assessment' },
+  // Live sessions: safe to grant now that object-level authorization (P0-1)
+  // restricts start/join/complete/cancel to the two assigned parties.
+  { key: 'livesession.session.manage', domain: 'livesession', high: true },
+  { key: 'livesession.session.join', domain: 'livesession', high: true },
 ];
 
 const GRANTS: Record<string, string[]> = {
@@ -55,6 +65,9 @@ const GRANTS: Record<string, string[]> = {
     'student.goal.manage', 'student.goal.read', 'student.progress.read',
     'booking.request.create', 'booking.request.read', 'booking.request.cancel',
     'course.course.read', 'course.enrollment.manage',
+    'assignment.assignment.read', 'assignment.submission.manage',
+    'assessment.assessment.read', 'assessment.submission.manage',
+    'livesession.session.join',
   ],
   parent: [
     'marketplace.favorite.manage', 'parent.child.monitor', 'booking.request.read',
@@ -64,6 +77,9 @@ const GRANTS: Record<string, string[]> = {
     'tutor.profile.read', 'tutor.profile.manage', 'tutor.availability.manage',
     'tutor.subject.manage', 'tutor.language.manage', 'tutor.rate.manage', 'tutor.dashboard.read',
     'booking.request.decide', 'booking.request.read', 'booking.request.cancel',
+    'assignment.assignment.manage', 'assignment.assignment.read',
+    'assessment.assessment.manage', 'assessment.assessment.read',
+    'livesession.session.manage', 'livesession.session.join',
   ],
 };
 

@@ -24,53 +24,55 @@ export class CurriculumController {
   @RequirePermissionKeys(PHASE3_PERMISSIONS.COURSE_MANAGE)
   @ApiOperation({ summary: 'Create a course' })
   createCourse(@Body() dto: CreateCourseDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.createCourse(dto, a.accountId, r.correlationId);
+    return this.curriculum.createCourse(dto, a, r.correlationId);
   }
 
   @Patch('courses/:id/status') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.COURSE_MANAGE)
-  @ApiOperation({ summary: 'Publish/retire a course' })
+  @ApiOperation({ summary: 'Publish/retire a course (the authoring tutor, or admin)' })
   publishCourse(@Param('id') id: string, @Body() dto: PublishDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.publishCourse(id, dto.status, a.accountId, r.correlationId);
+    return this.curriculum.publishCourse(id, dto.status, a, r.correlationId);
   }
 
   @Post('programs') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.PROGRAM_MANAGE)
   @ApiOperation({ summary: 'Create a program' })
   createProgram(@Body() dto: CreateProgramDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.createProgram(dto, a.accountId, r.correlationId);
+    return this.curriculum.createProgram(dto, a, r.correlationId);
   }
 
   @Post('programs/:id/courses') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.PROGRAM_MANAGE)
-  @ApiOperation({ summary: 'Add a course to a program' })
+  @ApiOperation({ summary: 'Add a course to a program (the program’s owner, or admin)' })
   addProgramCourse(@Param('id') id: string, @Body() dto: AddProgramCourseDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.addProgramCourse(id, dto, a.accountId, r.correlationId);
+    return this.curriculum.addProgramCourse(id, dto, a, r.correlationId);
   }
 
   @Post('paths') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.PATH_MANAGE)
   @ApiOperation({ summary: 'Create a learning path' })
   createPath(@Body() dto: CreatePathDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.createPath(dto, a.accountId, r.correlationId);
+    return this.curriculum.createPath(dto, a, r.correlationId);
   }
 
   @Post('paths/:id/steps') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.PATH_MANAGE)
-  @ApiOperation({ summary: 'Add a step to a learning path' })
+  @ApiOperation({ summary: 'Add a step to a learning path (the path’s owner, or admin)' })
   addPathStep(@Param('id') id: string, @Body() dto: AddPathStepDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.addPathStep(id, dto, a.accountId, r.correlationId);
+    return this.curriculum.addPathStep(id, dto, a, r.correlationId);
   }
 
   @Post('enrollments') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.ENROLLMENT_MANAGE)
-  @ApiOperation({ summary: 'Enroll a student in a course/program/path' })
+  @ApiOperation({ summary: 'Enroll a student in a course/program/path (own profile, an active guardian, or admin)' })
   enroll(@Body() dto: EnrollDto, @CurrentUser() a: AuthenticatedPrincipal, @Req() r: Request & { correlationId?: string }) {
-    return this.curriculum.enroll(dto, a.accountId, r.correlationId);
+    return this.curriculum.enroll(dto, a, r.correlationId);
   }
 
   @Get('students/:studentId/enrollments') @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE3_PERMISSIONS.COURSE_READ)
-  @ApiOperation({ summary: 'List a student’s enrollments' })
-  listEnrollments(@Param('studentId') studentId: string) { return this.curriculum.listEnrollments(studentId); }
+  @ApiOperation({ summary: 'List a student’s enrollments (own profile, an active guardian, or admin)' })
+  listEnrollments(@Param('studentId') studentId: string, @CurrentUser() a: AuthenticatedPrincipal) {
+    return this.curriculum.listEnrollments(studentId, a);
+  }
 }

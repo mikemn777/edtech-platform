@@ -28,68 +28,72 @@ export class BookingController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.bookings.request(dto, actor.accountId, req.correlationId);
+    return this.bookings.request(dto, actor, req.correlationId);
   }
 
   @Get(':id')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_READ)
-  @ApiOperation({ summary: 'Get a booking with its status history' })
-  get(@Param('id') id: string) {
-    return this.bookings.getById(id);
+  @ApiOperation({ summary: 'Get a booking with its status history (parties to the booking, or staff, only)' })
+  get(@Param('id') id: string, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return this.bookings.getById(id, actor);
   }
 
   @Post(':id/confirm')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_DECIDE)
-  @ApiOperation({ summary: 'Confirm a requested booking (tutor/admin)' })
+  @ApiOperation({ summary: 'Confirm a requested booking (the assigned tutor, or admin)' })
   confirm(
     @Param('id') id: string,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.bookings.transition(id, 'CONFIRMED', actor.accountId, undefined, req.correlationId);
+    return this.bookings.transition(id, 'CONFIRMED', actor, undefined, req.correlationId);
   }
 
   @Post(':id/reject')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_DECIDE)
-  @ApiOperation({ summary: 'Reject a requested booking (tutor/admin)' })
+  @ApiOperation({ summary: 'Reject a requested booking (the assigned tutor, or admin)' })
   reject(
     @Param('id') id: string,
     @Body() dto: CancelBookingDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.bookings.transition(id, 'REJECTED', actor.accountId, dto.reason, req.correlationId);
+    return this.bookings.transition(id, 'REJECTED', actor, dto.reason, req.correlationId);
   }
 
   @Post(':id/cancel')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_CANCEL)
-  @ApiOperation({ summary: 'Cancel a booking (no penalty applied — policy PBD)' })
+  @ApiOperation({ summary: 'Cancel a booking (either party, or admin; no penalty applied — policy PBD)' })
   cancel(
     @Param('id') id: string,
     @Body() dto: CancelBookingDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.bookings.transition(id, 'CANCELLED', actor.accountId, dto.reason, req.correlationId);
+    return this.bookings.transition(id, 'CANCELLED', actor, dto.reason, req.correlationId);
   }
 
   @Post(':id/complete')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_DECIDE)
-  @ApiOperation({ summary: 'Mark a confirmed booking completed' })
+  @ApiOperation({ summary: 'Mark a confirmed booking completed (the assigned tutor, or admin)' })
   complete(
     @Param('id') id: string,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.bookings.transition(id, 'COMPLETED', actor.accountId, undefined, req.correlationId);
+    return this.bookings.transition(id, 'COMPLETED', actor, undefined, req.correlationId);
   }
 
   @Get('tutors/:tutorId/list')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.BOOKING_READ)
-  @ApiOperation({ summary: 'List a tutor’s bookings (optional status filter)' })
+  @ApiOperation({ summary: 'List a tutor’s bookings (that tutor, or staff, only; optional status filter)' })
   @ApiQuery({ name: 'status', required: false })
-  listForTutor(@Param('tutorId') tutorId: string, @Query('status') status?: BookingStatus) {
-    return this.bookings.listForTutor(tutorId, status);
+  listForTutor(
+    @Param('tutorId') tutorId: string,
+    @CurrentUser() actor: AuthenticatedPrincipal,
+    @Query('status') status?: BookingStatus,
+  ) {
+    return this.bookings.listForTutor(tutorId, actor, status);
   }
 
   @Get('tutors/:tutorId/calendar')

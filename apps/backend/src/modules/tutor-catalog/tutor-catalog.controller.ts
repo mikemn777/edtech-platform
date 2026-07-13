@@ -30,19 +30,19 @@ export class TutorCatalogController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.catalog.addSubject(tutorId, dto, actor.accountId, req.correlationId);
+    return this.catalog.addSubject(tutorId, dto, actor, req.correlationId);
   }
 
   @Delete('subjects/:subjectId')
   @ApiBearerAuth('access-token')
   @RequirePermissionKeys(PHASE2B_PERMISSIONS.TUTOR_SUBJECT_MANAGE)
-  @ApiOperation({ summary: 'Remove a subject' })
+  @ApiOperation({ summary: 'Remove a subject (that tutor, or staff, only)' })
   removeSubject(
     @Param('subjectId') subjectId: string,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.catalog.removeSubject(subjectId, actor.accountId, req.correlationId);
+    return this.catalog.removeSubject(subjectId, actor, req.correlationId);
   }
 
   @Public()
@@ -62,7 +62,7 @@ export class TutorCatalogController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.catalog.addLanguage(tutorId, dto, actor.accountId, req.correlationId);
+    return this.catalog.addLanguage(tutorId, dto, actor, req.correlationId);
   }
 
   @Public()
@@ -82,6 +82,6 @@ export class TutorCatalogController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.catalog.setRate(tutorId, dto, actor.accountId, req.correlationId);
+    return this.catalog.setRate(tutorId, dto, actor, req.correlationId);
   }
 }

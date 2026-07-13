@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type {
   CreateTutorProfileDto,
   UpdateTutorProfileDto,
@@ -13,23 +15,33 @@ import type {
  * Tutor domain service (Business Domain Model §5). Owns the tutor profile and
  * offerings. A tutor may only OFFER/deliver when verified (BR-002) — activating
  * an offering is gated on verification status here. Pricing rules stay PBD.
+ *
+ * Object-level authorization (P0-1): a tutor profile/offering may only be
+ * created/changed by the owning account (or staff) — never on behalf of an
+ * arbitrary account just because the caller holds the manage permission.
  */
 @Injectable()
 export class TutorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ---- Profile ----
-  async createProfile(dto: CreateTutorProfileDto, actorAccountId: string, correlationId?: string) {
+  async createProfile(dto: CreateTutorProfileDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actorAccountId = principal.accountId;
     const accountId = dto.accountId ?? actorAccountId;
+    // A tutor may only claim their own account; staff may onboard on behalf of another.
+    this.policy.assertIsSelfOrOperational(principal, accountId);
     const account = await this.prisma.userAccount.findFirst({
       where: { id: accountId, isDeleted: false },
     });
     if (!account) throw DomainError.notFound('Account not found.');
 
-    const existing = await this.prisma.tutorProfile.findUnique({ where: { accountId } });
+    // findFirst + isDeleted filter (P0-2): a soft-deleted profile must not
+    // permanently block creating a new one for the same account.
+    const existing = await this.prisma.tutorProfile.findFirst({ where: { accountId, isDeleted: false } });
     if (existing) throw DomainError.conflict('Tutor profile already exists for this account.');
 
     const profile = await this.prisma.tutorProfile.create({
@@ -68,10 +80,12 @@ export class TutorService {
   async updateProfile(
     id: string,
     dto: UpdateTutorProfileDto,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
-    await this.getProfileById(id);
+    const actorAccountId = principal.accountId;
+    const existing = await this.getProfileById(id);
+    this.policy.assertIsSelfOrOperational(principal, existing.accountId);
     const profile = await this.prisma.tutorProfile.update({
       where: { id },
       data: {
@@ -97,10 +111,12 @@ export class TutorService {
   async createOffering(
     tutorId: string,
     dto: CreateOfferingDto,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
-    await this.getProfileById(tutorId);
+    const actorAccountId = principal.accountId;
+    const existing = await this.getProfileById(tutorId);
+    this.policy.assertIsSelfOrOperational(principal, existing.accountId);
     if (dto.basePrice !== undefined && !dto.currencyId) {
       // Money must be currency-explicit (DB Arch §12).
       throw DomainError.validation('basePrice requires a currencyId.');
@@ -129,21 +145,22 @@ export class TutorService {
   async setOfferingStatus(
     offeringId: string,
     status: OfferingStatusDto,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
+    const actorAccountId = principal.accountId;
     const offering = await this.prisma.tutorOffering.findFirst({
       where: { id: offeringId, isDeleted: false },
     });
     if (!offering) throw DomainError.notFound('Offering not found.');
+    const tutor = await this.prisma.tutorProfile.findUnique({ where: { id: offering.tutorId } });
+    if (!tutor) throw DomainError.notFound('Tutor profile not found.');
+    this.policy.assertIsSelfOrOperational(principal, tutor.accountId);
 
     // Eligibility gate (BR-002): an offering can only go ACTIVE if the tutor is
     // VERIFIED. Absent verification it cannot be made discoverable/bookable.
-    if (status === 'ACTIVE') {
-      const tutor = await this.prisma.tutorProfile.findUnique({ where: { id: offering.tutorId } });
-      if (!tutor || tutor.verificationStatus !== 'VERIFIED') {
-        throw DomainError.forbidden('Offering cannot be activated until the tutor is verified.');
-      }
+    if (status === 'ACTIVE' && tutor.verificationStatus !== 'VERIFIED') {
+      throw DomainError.forbidden('Offering cannot be activated until the tutor is verified.');
     }
 
     const updated = await this.prisma.tutorOffering.update({

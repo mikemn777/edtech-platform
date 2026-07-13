@@ -28,7 +28,7 @@ export class TutorController {
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.tutors.createProfile(dto, actor.accountId, req.correlationId);
+    return this.tutors.createProfile(dto, actor, req.correlationId);
   }
 
   @Get('profiles/me')
@@ -51,37 +51,37 @@ export class TutorController {
 
   @Patch('profiles/:id')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.TUTOR_PROFILE_MANAGE)
-  @ApiOperation({ summary: 'Update a tutor profile' })
+  @ApiOperation({ summary: 'Update a tutor profile (that tutor, or staff, only)' })
   async updateProfile(
     @Param('id') id: string,
     @Body() dto: UpdateTutorProfileDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.tutors.updateProfile(id, dto, actor.accountId, req.correlationId);
+    return this.tutors.updateProfile(id, dto, actor, req.correlationId);
   }
 
   @Post('profiles/:id/offerings')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.TUTOR_OFFERING_MANAGE)
-  @ApiOperation({ summary: 'Create an offering for a tutor' })
+  @ApiOperation({ summary: 'Create an offering for a tutor (that tutor, or staff, only)' })
   async createOffering(
     @Param('id') tutorId: string,
     @Body() dto: CreateOfferingDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.tutors.createOffering(tutorId, dto, actor.accountId, req.correlationId);
+    return this.tutors.createOffering(tutorId, dto, actor, req.correlationId);
   }
 
   @Patch('offerings/:offeringId/status')
   @RequirePermissionKeys(PHASE2_PERMISSIONS.TUTOR_OFFERING_MANAGE)
-  @ApiOperation({ summary: 'Change offering status (activation requires verification)' })
+  @ApiOperation({ summary: 'Change offering status (that tutor, or staff; activation requires verification)' })
   async setOfferingStatus(
     @Param('offeringId') offeringId: string,
     @Body() dto: UpdateOfferingStatusDto,
     @CurrentUser() actor: AuthenticatedPrincipal,
     @Req() req: Request & { correlationId?: string },
   ) {
-    return this.tutors.setOfferingStatus(offeringId, dto.status, actor.accountId, req.correlationId);
+    return this.tutors.setOfferingStatus(offeringId, dto.status, actor, req.correlationId);
   }
 }

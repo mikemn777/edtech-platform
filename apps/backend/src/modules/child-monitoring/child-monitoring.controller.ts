@@ -27,7 +27,7 @@ export class ChildMonitoringController {
     return this.monitoring.monitorChild(
       parentAccountId,
       studentAccountId,
-      actor.accountId,
+      actor,
       req.correlationId,
     );
   }

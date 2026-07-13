@@ -25,7 +25,10 @@ export class AuthService {
   async register(dto: RegisterDto, correlationId?: string): Promise<{ accountId: string }> {
     const email = dto.email.toLowerCase().trim();
 
-    const existing = await this.prisma.identity.findUnique({ where: { primaryEmail: email } });
+    // findFirst, not findUnique: primaryEmail is no longer a plain @unique — a
+    // soft-deleted identity must not block re-registration with the same email
+    // (P0-2; uniqueness among live rows is enforced by a partial index instead).
+    const existing = await this.prisma.identity.findFirst({ where: { primaryEmail: email, isDeleted: false } });
     if (existing) {
       // Do not reveal existence; conflict is generic.
       throw DomainError.conflict('Unable to register with the provided details.');
@@ -57,8 +60,8 @@ export class AuthService {
 
   async login(dto: LoginDto, correlationId?: string): Promise<IssuedTokens> {
     const email = dto.email.toLowerCase().trim();
-    const identity = await this.prisma.identity.findUnique({
-      where: { primaryEmail: email },
+    const identity = await this.prisma.identity.findFirst({
+      where: { primaryEmail: email, isDeleted: false },
       include: { credentials: { where: { method: 'PASSWORD', isDeleted: false } }, account: true },
     });
 

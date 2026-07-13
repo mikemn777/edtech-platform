@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type { CreateStudentProfileDto, UpdateStudentProfileDto } from '../contracts/student.dto';
 
 /**
@@ -10,23 +12,32 @@ import type { CreateStudentProfileDto, UpdateStudentProfileDto } from '../contra
  * most protective outcome unless an authoritative age rule exists — which is a
  * Pending Business/Legal Decision (Art. VI; BR-003). So `isMinor` defaults true
  * and is only relaxed when such a rule is logged (not in this phase).
+ *
+ * Object-level authorization (P0-1): a student profile may only be
+ * created/read/changed by the owning account, an active guardian, or staff.
  */
 @Injectable()
 export class StudentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
   async create(
     dto: CreateStudentProfileDto,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
+    const actorAccountId = principal.accountId;
     const accountId = dto.accountId ?? actorAccountId;
+    // A student may only claim their own account; staff may onboard on behalf of another.
+    this.policy.assertIsSelfOrOperational(principal, accountId);
     await this.ensureAccountExists(accountId);
 
-    const existing = await this.prisma.studentProfile.findUnique({ where: { accountId } });
+    // findFirst + isDeleted filter (P0-2): a soft-deleted profile must not
+    // permanently block creating a new one for the same account.
+    const existing = await this.prisma.studentProfile.findFirst({ where: { accountId, isDeleted: false } });
     if (existing) throw DomainError.conflict('Student profile already exists for this account.');
 
     const profile = await this.prisma.studentProfile.create({
@@ -60,19 +71,23 @@ export class StudentService {
     return this.toResponse(profile);
   }
 
-  async getById(id: string) {
+  async getById(id: string, principal: AuthenticatedPrincipal) {
     const profile = await this.prisma.studentProfile.findFirst({ where: { id, isDeleted: false } });
     if (!profile) throw DomainError.notFound('Student profile not found.');
+    if (!(await this.policy.canActOnStudentAccount(principal, profile.accountId))) {
+      throw DomainError.forbidden();
+    }
     return this.toResponse(profile);
   }
 
   async update(
     id: string,
     dto: UpdateStudentProfileDto,
-    actorAccountId: string,
+    principal: AuthenticatedPrincipal,
     correlationId?: string,
   ) {
-    await this.getById(id);
+    const actorAccountId = principal.accountId;
+    await this.getById(id, principal);
     const profile = await this.prisma.studentProfile.update({
       where: { id },
       data: {

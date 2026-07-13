@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
+import { PolicyService } from '../../../shared/authz/policy.service';
 import { DomainError } from '../../../platform/errors/domain-error';
+import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type {
   AddPathStepDto,
   AddProgramCourseDto,
@@ -18,16 +20,22 @@ import type {
  * (Business Domain Model §11-12). Structured educational offerings. Educational
  * alignment/accreditation RULES per market are Pending Business Decisions
  * (BR-104); this manages structure and lifecycle only.
+ *
+ * Object-level authorization (P0-1): authoring content is self-scoped (only
+ * the owning tutor, or staff, may change it); enrollment is student-scoped
+ * (only the student themselves, an active guardian, or staff).
  */
 @Injectable()
 export class CurriculumService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ---- Courses ----
-  async createCourse(dto: CreateCourseDto, actor: string, correlationId?: string) {
+  async createCourse(dto: CreateCourseDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const course = await this.prisma.course.create({
       data: {
         title: dto.title,
@@ -42,9 +50,13 @@ export class CurriculumService {
     return { id: course.id, status: course.status };
   }
 
-  async publishCourse(courseId: string, status: CourseStatusDto, actor: string, correlationId?: string) {
+  async publishCourse(courseId: string, status: CourseStatusDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const course = await this.prisma.course.findFirst({ where: { id: courseId, isDeleted: false } });
     if (!course) throw DomainError.notFound('Course not found.');
+    // Only the authoring tutor (or staff) may change a course's publication
+    // status — otherwise any COURSE_MANAGE holder could retire a rival's course.
+    this.policy.assertIsSelfOrOperational(principal, course.ownerAccountId);
     const updated = await this.prisma.course.update({
       where: { id: courseId },
       data: { status, updatedBy: actor, recordVersion: { increment: 1 } },
@@ -63,7 +75,8 @@ export class CurriculumService {
   }
 
   // ---- Programs ----
-  async createProgram(dto: CreateProgramDto, actor: string, correlationId?: string) {
+  async createProgram(dto: CreateProgramDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const program = await this.prisma.program.create({
       data: {
         title: dto.title,
@@ -77,13 +90,16 @@ export class CurriculumService {
     return { id: program.id, status: program.status };
   }
 
-  async addProgramCourse(programId: string, dto: AddProgramCourseDto, actor: string, correlationId?: string) {
+  async addProgramCourse(programId: string, dto: AddProgramCourseDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const [program, course] = await Promise.all([
       this.prisma.program.findFirst({ where: { id: programId, isDeleted: false } }),
       this.prisma.course.findFirst({ where: { id: dto.courseId, isDeleted: false } }),
     ]);
     if (!program) throw DomainError.notFound('Program not found.');
     if (!course) throw DomainError.notFound('Course not found.');
+    // Only the program's owner (or staff) may compose it.
+    this.policy.assertIsSelfOrOperational(principal, program.ownerAccountId);
     try {
       const link = await this.prisma.programCourse.create({
         data: { programId, courseId: dto.courseId, sequenceOrder: dto.sequenceOrder, createdBy: actor },
@@ -96,7 +112,8 @@ export class CurriculumService {
   }
 
   // ---- Learning Paths ----
-  async createPath(dto: CreatePathDto, actor: string, correlationId?: string) {
+  async createPath(dto: CreatePathDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const path = await this.prisma.learningPath.create({
       data: { title: dto.title, description: dto.description ?? null, ownerAccountId: actor, createdBy: actor },
     });
@@ -104,9 +121,12 @@ export class CurriculumService {
     return { id: path.id, status: path.status };
   }
 
-  async addPathStep(pathId: string, dto: AddPathStepDto, actor: string, correlationId?: string) {
+  async addPathStep(pathId: string, dto: AddPathStepDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const path = await this.prisma.learningPath.findFirst({ where: { id: pathId, isDeleted: false } });
     if (!path) throw DomainError.notFound('Learning path not found.');
+    // Only the path's owner (or staff) may compose it.
+    this.policy.assertIsSelfOrOperational(principal, path.ownerAccountId);
     try {
       const step = await this.prisma.learningPathStep.create({
         data: { pathId, refType: dto.refType, refId: dto.refId ?? null, title: dto.title, sequenceOrder: dto.sequenceOrder, createdBy: actor },
@@ -118,9 +138,14 @@ export class CurriculumService {
   }
 
   // ---- Enrollment ----
-  async enroll(dto: EnrollDto, actor: string, correlationId?: string) {
+  async enroll(dto: EnrollDto, principal: AuthenticatedPrincipal, correlationId?: string) {
+    const actor = principal.accountId;
     const student = await this.prisma.studentProfile.findFirst({ where: { id: dto.studentId, isDeleted: false } });
     if (!student) throw DomainError.notFound('Student profile not found.');
+    // Only the student themselves, an active guardian, or staff may enroll them (A2 pattern).
+    if (!(await this.policy.canActOnStudentAccount(principal, student.accountId))) {
+      throw DomainError.forbidden('You may only enroll your own student profile.');
+    }
 
     // Validate the target exists and is published.
     await this.assertEnrollableExists(dto.enrollableType, dto.enrollableId);
@@ -146,7 +171,8 @@ export class CurriculumService {
     return { id: enrollment.id, status: enrollment.status };
   }
 
-  async listEnrollments(studentId: string) {
+  async listEnrollments(studentId: string, principal: AuthenticatedPrincipal) {
+    if (!(await this.policy.canActOnStudentProfile(principal, studentId))) throw DomainError.forbidden();
     const rows = await this.prisma.enrollment.findMany({
       where: { studentId, isDeleted: false },
       orderBy: { enrolledAt: 'desc' },
