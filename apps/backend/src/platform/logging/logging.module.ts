@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
+import type { IncomingMessage } from 'http';
 import { LoggerModule } from 'nestjs-pino';
 import { AppConfigModule } from '../config/config.module';
 import { AppConfigService } from '../config/app-config.service';
+
+/** What CorrelationMiddleware actually attaches to the request (runs before
+ * pino-http's per-request hooks, so these are always present by then). */
+type RequestWithCorrelation = IncomingMessage & { correlationId?: string; language?: string };
 
 /**
  * Structured logging (Blueprint §12). Correlated (correlation id), leveled,
@@ -34,13 +39,13 @@ import { AppConfigService } from '../config/app-config.service';
             ],
             censor: '[REDACTED]',
           },
-          customProps: (req: { correlationId?: string; language?: string }) => ({
+          customProps: (req: RequestWithCorrelation) => ({
             correlationId: req.correlationId,
             language: req.language,
           }),
           // Never log full request bodies at info+ in production.
           serializers: {
-            req: (req: { method: string; url: string; correlationId?: string }) => ({
+            req: (req: RequestWithCorrelation) => ({
               method: req.method,
               url: req.url,
               correlationId: req.correlationId,

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import type { AuditEntry } from '../domain/audit-entry';
 
@@ -21,7 +22,9 @@ export class AuditService {
           action: entry.action,
           entityType: entry.entityType,
           entityReference: entry.entityReference ?? null,
-          authorityContext: entry.authorityContext ?? undefined,
+          // Domain layer stays Prisma-free (Record<string, unknown>); cast at
+          // this adapter boundary to Prisma's stricter JSON input type.
+          authorityContext: (entry.authorityContext as Prisma.InputJsonValue) ?? undefined,
           jurisdictionId: entry.jurisdictionId ?? null,
           classification: entry.classification ?? 'operational',
           correlationId: entry.correlationId ?? null,

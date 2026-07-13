@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
-import { AppConfigService } from '../../../platform/config/app-config.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { DomainError } from '../../../platform/errors/domain-error';
 import { PasswordHasher } from '../adapters/password-hasher';
@@ -19,7 +18,6 @@ export class AuthService {
     private readonly hasher: PasswordHasher,
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
-    private readonly config: AppConfigService,
   ) {}
 
   async register(dto: RegisterDto, correlationId?: string): Promise<{ accountId: string }> {

@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
-import { ConfigScope } from '@edu/types';
 
-/** Config scope (Master Schema — Setting; Constitution Art. X). */
+/** Config scope (Master Schema — Setting; Constitution Art. X). Mirrors the
+ * Prisma ConfigScope enum; kept separate so this contracts layer doesn't
+ * depend on generated Prisma types (Clean Architecture §4). */
 export enum ConfigScopeDto {
   PLATFORM = 'PLATFORM',
   COUNTRY = 'COUNTRY',
@@ -10,7 +11,6 @@ export enum ConfigScopeDto {
   ROLE = 'ROLE',
   ACCOUNT = 'ACCOUNT',
 }
-void ConfigScope;
 
 export class UpsertSettingDto {
   @ApiProperty()

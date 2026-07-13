@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { PolicyService } from '../../../shared/authz/policy.service';
@@ -65,7 +66,7 @@ export class TutorAvailabilityService {
           tutorId,
           startAt,
           endAt,
-          recurrence: dto.recurrence ?? undefined,
+          recurrence: (dto.recurrence as Prisma.InputJsonValue) ?? undefined,
           createdBy: actorAccountId,
         },
       });

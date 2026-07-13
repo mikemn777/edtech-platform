@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { DomainError } from '../../../platform/errors/domain-error';
@@ -37,12 +38,12 @@ export class SettingsService {
           scopeReference: (dto.scopeReference ?? null) as unknown as string,
         },
       },
-      update: { value: dto.value, updatedBy: actorAccountId, recordVersion: { increment: 1 } },
+      update: { value: dto.value as Prisma.InputJsonValue, updatedBy: actorAccountId, recordVersion: { increment: 1 } },
       create: {
         settingKey: dto.settingKey,
         scopeType: dto.scopeType,
         scopeReference: dto.scopeReference ?? null,
-        value: dto.value,
+        value: dto.value as Prisma.InputJsonValue,
         createdBy: actorAccountId,
       },
     });

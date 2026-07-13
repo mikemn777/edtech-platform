@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/application/audit.service';
 import type { OutboundNotification, NotificationChannelPort } from '../notifications/domain/notification-channel.port';
 import { EmailChannelAdapter } from './adapters/email-channel.adapter';
@@ -14,7 +14,6 @@ import { DomainError } from '../../platform/errors/domain-error';
  */
 @Injectable()
 export class MultiChannelNotificationService {
-  private readonly logger = new Logger(MultiChannelNotificationService.name);
   private readonly channels = new Map<string, NotificationChannelPort>();
 
   constructor(

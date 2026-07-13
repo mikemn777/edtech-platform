@@ -131,6 +131,7 @@ export class CurriculumService {
       const step = await this.prisma.learningPathStep.create({
         data: { pathId, refType: dto.refType, refId: dto.refId ?? null, title: dto.title, sequenceOrder: dto.sequenceOrder, createdBy: actor },
       });
+      await this.audit.record({ actorAccountId: actor, action: 'path.step_added', entityType: 'LearningPathStep', entityReference: step.id, correlationId });
       return { id: step.id };
     } catch {
       throw DomainError.conflict('A step already occupies that sequence position.');

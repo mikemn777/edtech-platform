@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import {
   NOTIFICATION_CHANNELS,
@@ -21,7 +20,6 @@ export class NotificationsService {
 
   constructor(
     @Inject(NOTIFICATION_CHANNELS) channels: NotificationChannelPort[],
-    private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {
     for (const ch of channels) this.channelMap.set(ch.channelKey, ch);

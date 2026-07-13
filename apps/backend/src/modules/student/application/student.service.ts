@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { PolicyService } from '../../../shared/authz/policy.service';
@@ -47,7 +48,7 @@ export class StudentService {
         // Most-protective default (BR-003). No age rule is authoritatively set.
         isMinor: true,
         jurisdictionId: dto.jurisdictionId ?? null,
-        learningContext: dto.learningContext ?? undefined,
+        learningContext: (dto.learningContext as Prisma.InputJsonValue) ?? undefined,
         createdBy: actorAccountId,
       },
     });
@@ -93,7 +94,7 @@ export class StudentService {
       data: {
         ...(dto.dateOfBirth !== undefined ? { dateOfBirth: new Date(dto.dateOfBirth) } : {}),
         ...(dto.jurisdictionId !== undefined ? { jurisdictionId: dto.jurisdictionId } : {}),
-        ...(dto.learningContext !== undefined ? { learningContext: dto.learningContext } : {}),
+        ...(dto.learningContext !== undefined ? { learningContext: dto.learningContext as Prisma.InputJsonValue } : {}),
         updatedBy: actorAccountId,
         recordVersion: { increment: 1 },
       },

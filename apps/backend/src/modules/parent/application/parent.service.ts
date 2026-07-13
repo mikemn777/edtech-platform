@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { PolicyService } from '../../../shared/authz/policy.service';
@@ -40,7 +41,7 @@ export class ParentService {
     const profile = await this.prisma.parentProfile.create({
       data: {
         accountId,
-        oversightContext: dto.oversightContext ?? undefined,
+        oversightContext: (dto.oversightContext as Prisma.InputJsonValue) ?? undefined,
         createdBy: actorAccountId,
       },
     });
@@ -73,7 +74,7 @@ export class ParentService {
     const profile = await this.prisma.parentProfile.update({
       where: { id },
       data: {
-        ...(dto.oversightContext !== undefined ? { oversightContext: dto.oversightContext } : {}),
+        ...(dto.oversightContext !== undefined ? { oversightContext: dto.oversightContext as Prisma.InputJsonValue } : {}),
         updatedBy: actorAccountId,
         recordVersion: { increment: 1 },
       },
