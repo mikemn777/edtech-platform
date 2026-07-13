@@ -6,9 +6,27 @@ import { parentNav } from '@/components/navs';
 import { getTranslator } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { listGuardianships, linkChild, monitorChild, type GuardianshipRow, type MonitorSummary } from '@/lib/parent';
+import { ApiError } from '@/lib/api-client';
 import { Users, Check } from '@/components/icons';
 
 interface Row extends GuardianshipRow { monitor?: MonitorSummary | null }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Turn a backend link failure into a clear, translated message the parent can act on. */
+function linkErrorText(e: unknown, childId: string, parentId: string | null, t: (k: string) => string): string {
+  if (childId && parentId && childId === parentId) return t('kids.err.self');
+  if (childId && !UUID_RE.test(childId)) return t('kids.err.invalid');
+  if (e instanceof ApiError) {
+    const m = (e.body?.error?.message ?? '').toLowerCase();
+    if (e.status === 409 || m.includes('already')) return t('kids.err.exists');
+    if (m.includes('itself')) return t('kids.err.self');
+    if (m.includes('student profile')) return t('kids.err.notfound');
+    if (e.status === 404) return t('kids.err.notfound');
+    if (e.status === 400 || e.status === 422) return t('kids.err.invalid');
+  }
+  return t('kids.error');
+}
 
 export default function ParentChildren({ params }: { params: { lang: string } }) {
   const lang = params.lang;
@@ -44,7 +62,7 @@ export default function ParentChildren({ params }: { params: { lang: string } })
       await linkChild(parentId, childId.trim());
       setChildId(''); setDone(true);
       await reload(parentId);
-    } catch { setErr(t('kids.error')); } finally { setBusy(false); }
+    } catch (e) { setErr(linkErrorText(e, childId.trim(), parentId, t)); } finally { setBusy(false); }
   }
 
   return (

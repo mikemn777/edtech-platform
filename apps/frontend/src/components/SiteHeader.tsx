@@ -34,14 +34,15 @@ export default function SiteHeader({ lang }: { lang: string }) {
         </nav>
 
         <div className="row gap-1">
+          <a href={`/${lang}/register`} className="nav-link-plain hide-sm">{t('footer.becomeTutor')}</a>
           <ThemeToggle />
           <LangSwitcher current={lang} />
           {session.authenticated ? (
-            <a href={dashHref} className="btn btn-primary hide-sm"><Grid width={16} height={16} /> {t('nav.dashboard')}</a>
+            <a href={dashHref} className="btn header-cta hide-sm"><Grid width={16} height={16} /> {t('nav.dashboard')}</a>
           ) : (
             <>
-              <a href={`/${lang}/login`} className="btn btn-ghost hide-sm">{t('nav.signin')}</a>
-              <a href={`/${lang}/register`} className="btn btn-primary hide-sm">{t('cta.getStarted')}</a>
+              <a href={`/${lang}/login`} className="btn header-ghost hide-sm">{t('nav.signin')}</a>
+              <a href={`/${lang}/start`} className="btn header-cta hide-sm">{t('cta.getStarted')}</a>
             </>
           )}
           <button className="icon-btn" style={{ display: 'none' }} onClick={() => setOpen((o) => !o)} aria-label="Menu" data-mobile-menu>
@@ -51,18 +52,19 @@ export default function SiteHeader({ lang }: { lang: string }) {
       </div>
 
       {open && (
-        <div className="container" style={{ paddingBottom: '1rem' }}>
+        <div className="container header-mobile" style={{ paddingBottom: '1rem' }}>
           <div className="stack gap-1">
             {nav.map((n) => (
               <a key={n.href} href={n.href} className="btn btn-ghost btn-block" style={{ justifyContent: 'flex-start' }}>{n.label}</a>
             ))}
+            <a href={`/${lang}/register`} className="btn btn-ghost btn-block" style={{ justifyContent: 'flex-start' }}>{t('footer.becomeTutor')}</a>
             <div className="divider" />
             {session.authenticated ? (
               <a href={dashHref} className="btn btn-primary btn-block">{t('nav.dashboard')}</a>
             ) : (
               <>
                 <a href={`/${lang}/login`} className="btn btn-outline btn-block">{t('nav.signin')}</a>
-                <a href={`/${lang}/register`} className="btn btn-primary btn-block">{t('cta.getStarted')}</a>
+                <a href={`/${lang}/start`} className="btn btn-primary btn-block">{t('cta.getStarted')}</a>
               </>
             )}
           </div>

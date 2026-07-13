@@ -7,6 +7,7 @@ import { getTranslator } from '@/lib/i18n';
 import ThemeToggle from './ThemeToggle';
 import BackButton from './BackButton';
 import LangSwitcher from './LangSwitcher';
+import BrandLoader from './BrandLoader';
 import { Logout } from './icons';
 
 export interface NavItem {
@@ -44,13 +45,7 @@ export default function DashboardShell({
     else setReady(true);
   }, [session.loading, session.authenticated, lang, router]);
 
-  if (!ready) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <span className="spinner" style={{ width: 26, height: 26, color: 'var(--primary)' }} />
-      </div>
-    );
-  }
+  if (!ready) return <BrandLoader lang={lang} />;
 
   const initials = (session.email ?? 'U').slice(0, 2).toUpperCase();
 

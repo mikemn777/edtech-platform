@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DashboardShell from '@/components/DashboardShell';
 import { studentNav } from '@/components/navs';
 import { getTranslator } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
+import { ensureStudentProfileId } from '@/lib/booking';
 import { Star, Calendar, Book, ArrowRight, Users, Check } from '@/components/icons';
 
 export default function StudentHome({ params }: { params: { lang: string } }) {
@@ -13,6 +14,12 @@ export default function StudentHome({ params }: { params: { lang: string } }) {
   const s = useSession();
   const linkCode = s.claims?.sub ?? '';
   const [copied, setCopied] = useState(false);
+
+  // Make sure this student has a profile row so a parent can link to them by code.
+  useEffect(() => {
+    if (s.loading || !s.authenticated) return;
+    ensureStudentProfileId().catch(() => { /* non-blocking */ });
+  }, [s.loading, s.authenticated]);
 
   async function copyCode() {
     try {

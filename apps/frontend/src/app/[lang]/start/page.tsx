@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getTranslator, getDirection } from '@/lib/i18n';
 import { ArrowRight, Check, User, Users } from '@/components/icons';
@@ -41,6 +41,26 @@ export default function StartWizard({ params }: { params: { lang: string } }) {
 
   function next() { setStep((s) => Math.min(s + 1, TOTAL - 1)); }
   function back() { setStep((s) => Math.max(s - 1, 0)); }
+
+  // Make the browser/phone Back button walk backwards through the wizard steps
+  // instead of dumping the user out to the homepage. We keep one "trap" entry in
+  // history; each Back re-arms it and moves one question back, until the first
+  // question, where Back finally leaves to the homepage.
+  useEffect(() => {
+    window.history.pushState({ eduWizard: true }, '');
+    const onPop = () => {
+      setStep((s) => {
+        if (s > 0) {
+          window.history.pushState({ eduWizard: true }, '');
+          return s - 1;
+        }
+        window.location.assign(`/${lang}`);
+        return 0;
+      });
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [lang]);
 
   function finish() {
     if (typeof window !== 'undefined') {
