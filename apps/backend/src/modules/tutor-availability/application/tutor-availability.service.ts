@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { PolicyService } from '../../../shared/authz/policy.service';
+import { lockForWrite } from '../../../shared/prisma/advisory-lock';
 import { DomainError } from '../../../platform/errors/domain-error';
 import type { AuthenticatedPrincipal } from '../../../shared/identity/request-context';
 import type { CreateAvailabilityDto } from '../contracts/availability.dto';
@@ -42,26 +43,32 @@ export class TutorAvailabilityService {
       throw DomainError.validation('endAt must be after startAt.');
     }
 
-    // Prevent overlapping ACTIVE windows (temporal integrity — Requirements EC-004).
-    const overlap = await this.prisma.tutorAvailability.findFirst({
-      where: {
-        tutorId,
-        status: 'ACTIVE',
-        isDeleted: false,
-        startAt: { lt: endAt },
-        endAt: { gt: startAt },
-      },
-    });
-    if (overlap) throw DomainError.conflict('Overlapping availability window exists.');
+    // Overlap-check + insert must be atomic per tutor (P0-3/B2): otherwise two
+    // concurrent create calls could both pass the check before either inserts.
+    const created = await this.prisma.$transaction(async (tx) => {
+      await lockForWrite(tx, tutorId);
 
-    const created = await this.prisma.tutorAvailability.create({
-      data: {
-        tutorId,
-        startAt,
-        endAt,
-        recurrence: dto.recurrence ?? undefined,
-        createdBy: actorAccountId,
-      },
+      // Prevent overlapping ACTIVE windows (temporal integrity — Requirements EC-004).
+      const overlap = await tx.tutorAvailability.findFirst({
+        where: {
+          tutorId,
+          status: 'ACTIVE',
+          isDeleted: false,
+          startAt: { lt: endAt },
+          endAt: { gt: startAt },
+        },
+      });
+      if (overlap) throw DomainError.conflict('Overlapping availability window exists.');
+
+      return tx.tutorAvailability.create({
+        data: {
+          tutorId,
+          startAt,
+          endAt,
+          recurrence: dto.recurrence ?? undefined,
+          createdBy: actorAccountId,
+        },
+      });
     });
     await this.audit.record({
       actorAccountId,

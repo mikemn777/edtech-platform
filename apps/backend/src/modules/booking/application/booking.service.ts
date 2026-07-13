@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AuditService } from '../../audit/application/audit.service';
 import { PolicyService } from '../../../shared/authz/policy.service';
+import { lockForWrite } from '../../../shared/prisma/advisory-lock';
 import { DomainError } from '../../../platform/errors/domain-error';
 import { canTransition, type BookingStatus } from '../domain/booking-status';
 import { slotIsBookable, type TimeWindow } from '../domain/availability-engine';
@@ -57,32 +58,38 @@ export class BookingService {
       throw DomainError.forbidden('Tutor is not verified and cannot be booked.');
     }
 
-    // Availability windows (active, in range) and existing busy slots.
-    const [windows, busy] = await Promise.all([
-      this.prisma.tutorAvailability.findMany({
-        where: { tutorId: dto.tutorId, status: 'ACTIVE', isDeleted: false },
-        select: { startAt: true, endAt: true },
-      }),
-      this.prisma.booking.findMany({
-        where: {
-          tutorId: dto.tutorId,
-          isDeleted: false,
-          status: { in: ['REQUESTED', 'CONFIRMED'] },
-        },
-        select: { scheduledStart: true, scheduledEnd: true },
-      }),
-    ]);
-
-    const bookable = slotIsBookable(
-      slot,
-      windows.map((w) => ({ startAt: w.startAt, endAt: w.endAt })),
-      busy.map((b) => ({ startAt: b.scheduledStart, endAt: b.scheduledEnd })),
-    );
-    if (!bookable) {
-      throw DomainError.conflict('Requested slot is not available.');
-    }
-
+    // Availability-check + insert must be atomic per tutor (P0-3/B2): without
+    // this, two concurrent requests for the same slot could both pass
+    // slotIsBookable before either has inserted, double-booking the tutor.
+    // An advisory lock serializes writers for this tutor; the check is
+    // re-evaluated for real inside the lock, right before the insert.
     const booking = await this.prisma.$transaction(async (tx) => {
+      await lockForWrite(tx, dto.tutorId);
+
+      const [windows, busy] = await Promise.all([
+        tx.tutorAvailability.findMany({
+          where: { tutorId: dto.tutorId, status: 'ACTIVE', isDeleted: false },
+          select: { startAt: true, endAt: true },
+        }),
+        tx.booking.findMany({
+          where: {
+            tutorId: dto.tutorId,
+            isDeleted: false,
+            status: { in: ['REQUESTED', 'CONFIRMED'] },
+          },
+          select: { scheduledStart: true, scheduledEnd: true },
+        }),
+      ]);
+
+      const bookable = slotIsBookable(
+        slot,
+        windows.map((w) => ({ startAt: w.startAt, endAt: w.endAt })),
+        busy.map((b) => ({ startAt: b.scheduledStart, endAt: b.scheduledEnd })),
+      );
+      if (!bookable) {
+        throw DomainError.conflict('Requested slot is not available.');
+      }
+
       const created = await tx.booking.create({
         data: {
           studentId: dto.studentId,
