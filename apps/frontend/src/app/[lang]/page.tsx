@@ -94,7 +94,8 @@ export default function HomePage({ params }: { params: { lang: string } }) {
       </section>
 
       {/* PROGRAMS — outcome-led, one decision per card */}
-      <section className="section container">
+      <section className="section section-alt">
+        <div className="container">
         <div className="text-c" style={{ maxWidth: 640, marginInline: 'auto' }}>
           <span className="eyebrow">{t('home.programs.eyebrow')}</span>
           <h2>{t('home.programs.title')}</h2>
@@ -121,6 +122,7 @@ export default function HomePage({ params }: { params: { lang: string } }) {
             </div>
           ))}
         </div>
+        </div>
       </section>
 
       {/* FEATURES */}
@@ -142,7 +144,7 @@ export default function HomePage({ params }: { params: { lang: string } }) {
       </section>
 
       {/* HOW IT WORKS */}
-      <section className="section" style={{ background: 'var(--bg-elev)', borderBlock: '1px solid var(--border)' }}>
+      <section className="section section-alt">
         <div className="container">
           <div className="text-c" style={{ maxWidth: 640, marginInline: 'auto' }}>
             <span className="eyebrow">{t('home.how.eyebrow')}</span>
