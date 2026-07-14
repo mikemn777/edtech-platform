@@ -57,21 +57,21 @@ export default function SettingsPage({ params }: { params: { lang: string } }) {
           <h3 className="mb-0">{t('settings.account')}</h3>
         </div>
         <div className="stack gap-2 mt-3">
-          <div className="row between wrap gap-2">
+          <div className="stack gap-1">
             <span className="muted small">{t('settings.email')}</span>
             <strong>{s.email}</strong>
           </div>
           <div className="divider" />
-          <div className="row between wrap gap-2">
+          <div className="stack gap-1">
             <span className="muted small">{t('settings.roles')}</span>
             <span className="row gap-1 wrap">
               {s.roles.map((r) => <span key={r} className="badge badge-neutral">{r}</span>)}
             </span>
           </div>
           <div className="divider" />
-          <div className="row between wrap gap-2">
+          <div className="stack gap-1">
             <span className="muted small">{t('settings.accountId')}</span>
-            <span className="row gap-1">
+            <span className="row gap-1 wrap">
               <code className="mono small" style={{ background: 'var(--surface-2)', padding: '.3rem .55rem', borderRadius: 8, userSelect: 'all' }}>{(s.claims?.sub ?? '').slice(0, 13)}…</code>
               <button className="btn btn-outline btn-sm" onClick={copyId}>{copied ? <><Check width={13} height={13} /> {t('kids.copied')}</> : t('kids.copy')}</button>
             </span>

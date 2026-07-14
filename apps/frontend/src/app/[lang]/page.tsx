@@ -40,7 +40,7 @@ export default function HomePage({ params }: { params: { lang: string } }) {
       <section className="hero section">
         <div className="hero-bg" />
         <div className="container" style={{ position: 'relative' }}>
-          <div className="grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'center', gap: '2.5rem' }}>
+          <div className="grid hero-grid">
             <div>
               <span className="eyebrow"><Sparkles width={15} height={15} /> {t('home.hero.eyebrow')}</span>
               <h1>{t('home.hero.title')}</h1>
@@ -108,7 +108,7 @@ export default function HomePage({ params }: { params: { lang: string } }) {
             { tint: 'rgba(245,158,11,.10)', icon: <Star width={20} height={20} />, title: t('prog.exam.t'), desc: t('prog.exam.d'), tags: [t('prog.exam.tag1'), t('prog.exam.tag2')] },
           ].map((p) => (
             <div key={p.title} className="card card-pad-lg" style={{ background: p.tint, border: '1px solid var(--border)' }}>
-              <div className="grid" style={{ gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: '1.5rem' }}>
+              <div className="grid program-grid">
                 <span className="brand-mark hide-sm" style={{ width: 64, height: 64, borderRadius: 18 }}>{p.icon}</span>
                 <div>
                   <h3 className="mb-0">{p.title}</h3>
