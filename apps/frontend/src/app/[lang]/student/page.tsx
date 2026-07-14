@@ -6,7 +6,7 @@ import { studentNav } from '@/components/navs';
 import { getTranslator } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { ensureStudentProfileId } from '@/lib/booking';
-import { Star, Calendar, Book, ArrowRight, Users, Check } from '@/components/icons';
+import { Star, Calendar, Book, ArrowRight, Users, Check, Heart, Chart, FileText, Award, Settings } from '@/components/icons';
 
 export default function StudentHome({ params }: { params: { lang: string } }) {
   const lang = params.lang;
@@ -20,6 +20,20 @@ export default function StudentHome({ params }: { params: { lang: string } }) {
     if (s.loading || !s.authenticated) return;
     ensureStudentProfileId().catch(() => { /* non-blocking */ });
   }, [s.loading, s.authenticated]);
+
+  const cards = [
+    { href: `/${lang}/tutors`, icon: <Star />, title: t('student.find.t'), desc: t('student.find.d') },
+    { href: `/${lang}/student/bookings`, icon: <Calendar />, title: t('student.book.t'), desc: t('student.book.d') },
+    { href: `/${lang}/favorites`, icon: <Heart />, title: t('nav.favorites'), desc: t('fav.subtitle') },
+    { href: `/${lang}/student/goals`, icon: <Check />, title: t('nav.goals'), desc: t('goals.subtitle') },
+    { href: `/${lang}/student/courses`, icon: <Book />, title: t('student.learn.t'), desc: t('student.learn.d') },
+    { href: `/${lang}/student/homework`, icon: <Check />, title: t('nav.homework'), desc: t('hw.s.subtitle') },
+    { href: `/${lang}/student/quizzes`, icon: <Chart />, title: t('nav.quizzes'), desc: t('qz.s.subtitle') },
+    { href: `/${lang}/student/certificates`, icon: <Award />, title: t('nav.certificates'), desc: t('cert.subtitle') },
+    { href: `/${lang}/student/progress`, icon: <Chart />, title: t('nav.progress'), desc: t('progress.subtitle') },
+    { href: `/${lang}/notes`, icon: <FileText />, title: t('nav.notes'), desc: t('notes.subtitle') },
+    { href: `/${lang}/settings`, icon: <Settings />, title: t('nav.settings'), desc: t('settings.subtitle') },
+  ];
 
   async function copyCode() {
     try {
@@ -62,24 +76,14 @@ export default function StudentHome({ params }: { params: { lang: string } }) {
 
       <h3 className="mt-4">{t('student.next')}</h3>
       <div className="grid cols-3 mt-2">
-        <a href={`/${lang}/tutors`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Star /></div>
-          <h3 className="mt-2">{t('student.find.t')}</h3>
-          <p className="muted small">{t('student.find.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('nav.tutors')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/student/bookings`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Calendar /></div>
-          <h3 className="mt-2">{t('student.book.t')}</h3>
-          <p className="muted small">{t('student.book.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/student/courses`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Book /></div>
-          <h3 className="mt-2">{t('student.learn.t')}</h3>
-          <p className="muted small">{t('student.learn.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
+        {cards.map((c) => (
+          <a href={c.href} className="card card-hover" key={c.href}>
+            <div className="brand-mark" style={{ width: 40, height: 40 }}>{c.icon}</div>
+            <h3 className="mt-2">{c.title}</h3>
+            <p className="muted small">{c.desc}</p>
+            <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
+          </a>
+        ))}
       </div>
     </DashboardShell>
   );

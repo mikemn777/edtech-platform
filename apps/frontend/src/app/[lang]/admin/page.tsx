@@ -6,7 +6,7 @@ import { getTranslator } from '@/lib/i18n';
 import { useApiQuery } from '@/lib/useApi';
 import { useSession } from '@/lib/session';
 import type { PaginatedResult } from '@edu/types';
-import { Users, Shield, Book, ArrowRight } from '@/components/icons';
+import { Users, Shield, Book, ArrowRight, Chart, Settings } from '@/components/icons';
 
 export default function AdminHome({ params }: { params: { lang: string } }) {
   const lang = params.lang;
@@ -29,24 +29,20 @@ export default function AdminHome({ params }: { params: { lang: string } }) {
 
       <h3 className="mt-4">{t('admin.quick')}</h3>
       <div className="grid cols-3 mt-2">
-        <a href={`/${lang}/admin/users`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Users /></div>
-          <h3 className="mt-2">{t('admin.users.title')}</h3>
-          <p className="muted small">{t('admin.users.desc')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/admin/verification`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Shield /></div>
-          <h3 className="mt-2">{t('admin.verify.title')}</h3>
-          <p className="muted small">{t('admin.verify.desc')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/admin/content`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Book /></div>
-          <h3 className="mt-2">{t('admin.content.title')}</h3>
-          <p className="muted small">{t('admin.content.desc')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
+        {[
+          { href: `/${lang}/admin/users`, icon: <Users />, title: t('admin.users.title'), desc: t('admin.users.desc') },
+          { href: `/${lang}/admin/verification`, icon: <Shield />, title: t('admin.verify.title'), desc: t('admin.verify.desc') },
+          { href: `/${lang}/admin/content`, icon: <Book />, title: t('admin.content.title'), desc: t('admin.content.desc') },
+          { href: `/${lang}/admin/analytics`, icon: <Chart />, title: t('nav.analytics'), desc: t('ana.subtitle') },
+          { href: `/${lang}/settings`, icon: <Settings />, title: t('nav.settings'), desc: t('settings.subtitle') },
+        ].map((c) => (
+          <a href={c.href} className="card card-hover" key={c.href}>
+            <div className="brand-mark" style={{ width: 40, height: 40 }}>{c.icon}</div>
+            <h3 className="mt-2">{c.title}</h3>
+            <p className="muted small">{c.desc}</p>
+            <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
+          </a>
+        ))}
       </div>
     </DashboardShell>
   );

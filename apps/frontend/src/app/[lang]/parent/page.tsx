@@ -4,12 +4,21 @@ import DashboardShell from '@/components/DashboardShell';
 import { parentNav } from '@/components/navs';
 import { getTranslator } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
-import { Users, Star, Calendar, ArrowRight } from '@/components/icons';
+import { Users, Star, Calendar, ArrowRight, Heart, FileText, Settings } from '@/components/icons';
 
 export default function ParentHome({ params }: { params: { lang: string } }) {
   const lang = params.lang;
   const t = getTranslator(lang);
   const s = useSession();
+
+  const cards = [
+    { href: `/${lang}/parent/children`, icon: <Users />, title: t('parent.link.t'), desc: t('parent.link.d') },
+    { href: `/${lang}/tutors`, icon: <Star />, title: t('student.find.t'), desc: t('parent.find.d') },
+    { href: `/${lang}/parent/children`, icon: <Calendar />, title: t('parent.monitor.t'), desc: t('parent.monitor.d') },
+    { href: `/${lang}/favorites`, icon: <Heart />, title: t('nav.favorites'), desc: t('fav.subtitle') },
+    { href: `/${lang}/notes`, icon: <FileText />, title: t('nav.notes'), desc: t('notes.subtitle') },
+    { href: `/${lang}/settings`, icon: <Settings />, title: t('nav.settings'), desc: t('settings.subtitle') },
+  ];
 
   return (
     <DashboardShell lang={lang} title={t('parent.title')} nav={parentNav(lang, t)} active={`/${lang}/parent`}>
@@ -24,24 +33,14 @@ export default function ParentHome({ params }: { params: { lang: string } }) {
 
       <h3 className="mt-4">{t('student.next')}</h3>
       <div className="grid cols-3 mt-2">
-        <a href={`/${lang}/parent/children`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Users /></div>
-          <h3 className="mt-2">{t('parent.link.t')}</h3>
-          <p className="muted small">{t('parent.link.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/tutors`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Star /></div>
-          <h3 className="mt-2">{t('student.find.t')}</h3>
-          <p className="muted small">{t('parent.find.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('nav.tutors')} <ArrowRight width={15} height={15} /></span>
-        </a>
-        <a href={`/${lang}/parent/children`} className="card card-hover">
-          <div className="brand-mark" style={{ width: 40, height: 40 }}><Calendar /></div>
-          <h3 className="mt-2">{t('parent.monitor.t')}</h3>
-          <p className="muted small">{t('parent.monitor.d')}</p>
-          <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
-        </a>
+        {cards.map((c, i) => (
+          <a href={c.href} className="card card-hover" key={`${c.href}-${i}`}>
+            <div className="brand-mark" style={{ width: 40, height: 40 }}>{c.icon}</div>
+            <h3 className="mt-2">{c.title}</h3>
+            <p className="muted small">{c.desc}</p>
+            <span className="row gap-1" style={{ color: 'var(--primary)', fontWeight: 600 }}>{t('common.open')} <ArrowRight width={15} height={15} /></span>
+          </a>
+        ))}
       </div>
     </DashboardShell>
   );
