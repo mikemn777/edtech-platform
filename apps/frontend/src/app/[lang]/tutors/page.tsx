@@ -36,6 +36,15 @@ export default function TutorsPage({ params }: { params: { lang: string } }) {
   const [favSet, setFavSet] = useState<Set<string>>(new Set());
   useEffect(() => { if (favQuery.data) setFavSet(new Set(favQuery.data.map((f) => f.tutorId))); }, [favQuery.data]);
 
+  // Honor ?subject= and ?q= from the URL (used by per-subject landing pages).
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const s = sp.get('subject');
+    const qq = sp.get('q');
+    if (s) setSubject(s);
+    if (qq) setQ(qq);
+  }, []);
+
   async function toggleFav(tutorId: string) {
     if (!loggedIn) { router.push(`/${lang}/login`); return; }
     const isFav = favSet.has(tutorId);

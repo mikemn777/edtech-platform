@@ -6,11 +6,15 @@ export default function SiteFooter({ lang }: { lang: string }) {
   const cols = [
     { h: t('footer.platform'), links: [
       { href: `/${lang}/tutors`, label: t('nav.tutors') },
+      { href: `/${lang}/subjects`, label: t('nav.subjects') },
+      { href: `/${lang}/resources`, label: t('nav.resources') },
       { href: `/${lang}/courses`, label: t('nav.courses') },
       { href: `/${lang}/pricing`, label: t('nav.pricing') },
     ] },
     { h: t('footer.company'), links: [
       { href: `/${lang}/about`, label: t('nav.about') },
+      { href: `/${lang}/blog`, label: t('nav.blog') },
+      { href: `/${lang}/credibility`, label: t('nav.credibility') },
       { href: `/${lang}/contact`, label: t('footer.contact') },
       { href: `/${lang}/register?role=tutor`, label: t('footer.becomeTutor') },
     ] },

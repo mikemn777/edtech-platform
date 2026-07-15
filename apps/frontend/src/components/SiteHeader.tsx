@@ -15,7 +15,10 @@ export default function SiteHeader({ lang }: { lang: string }) {
   const dashHref = homePathForRoles(lang, session.roles);
   const nav = [
     { href: `/${lang}/tutors`, label: t('nav.tutors') },
+    { href: `/${lang}/subjects`, label: t('nav.subjects') },
+    { href: `/${lang}/resources`, label: t('nav.resources') },
     { href: `/${lang}/courses`, label: t('nav.courses') },
+    { href: `/${lang}/blog`, label: t('nav.blog') },
     { href: `/${lang}/pricing`, label: t('nav.pricing') },
     { href: `/${lang}/about`, label: t('nav.about') },
   ];
